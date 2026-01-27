@@ -49,7 +49,7 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<User> {
-    return api.get<User>('/queries/users/me');
+    return api.get<User>('/queries/v2/users/me');
   },
 
   async forgotPassword(email: string): Promise<void> {
