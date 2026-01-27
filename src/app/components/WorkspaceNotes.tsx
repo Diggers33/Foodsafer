@@ -75,7 +75,7 @@ export function WorkspaceNotes({ workspaceId }: WorkspaceNotesProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.get<any[]>(`/workspaces/${workspaceId}/notes`);
+      const data = await api.get<any[]>(`/queries/workspaces/${workspaceId}/notes`);
       const notesArray = Array.isArray(data) ? data : [];
       setNotes(notesArray.map(mapNote));
     } catch (err) {
