@@ -1,77 +1,129 @@
-import { useState } from 'react';
-import { ArrowLeft, Edit, MoreVertical, Calendar as CalendarIcon, Clock, MapPin, Video, Check, X, Building } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Edit, MoreVertical, Calendar as CalendarIcon, Clock, MapPin, Video, Check, X, Building, Loader2, Users } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { api } from '@/api';
 
 interface MeetingDetailProps {
   meetingId: string;
   onBack: () => void;
 }
 
-const mockMeeting = {
-  id: '1',
-  title: 'HACCP Protocol Review Meeting',
-  description: 'Comprehensive review of the updated HACCP protocol for allergen management. We will discuss the key changes, implementation timeline, and gather feedback from all facility managers.',
-  date: 'January 8, 2026',
-  startTime: '10:00 AM',
-  endTime: '11:30 AM',
-  duration: '1 hour 30 minutes',
-  isVirtual: true,
-  meetingLink: 'https://meet.foodsafer.com/haccp-review',
-  agenda: [
-    'Welcome and introduction (5 mins)',
-    'Overview of FDA guideline updates (15 mins)',
-    'New protocol walkthrough (30 mins)',
-    'Q&A and feedback session (30 mins)',
-    'Implementation timeline and next steps (10 mins)',
-  ],
-  participants: [
-    { 
-      id: '1',
-      name: 'Dr. Maria Rodriguez', 
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-      rsvpStatus: 'Attending'
-    },
-    { 
-      id: '2',
-      name: 'James Chen', 
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-      rsvpStatus: 'Attending'
-    },
-    { 
-      id: '3',
-      name: 'Sarah Johnson', 
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-      rsvpStatus: 'Attending'
-    },
-    { 
-      id: '4',
-      name: 'Emily Davis', 
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop',
-      rsvpStatus: 'Virtual'
-    },
-    { 
-      id: '5',
-      name: 'Michael Brown', 
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
-      rsvpStatus: 'Pending'
-    },
-    { 
-      id: '6',
-      name: 'Lisa Anderson', 
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop',
-      rsvpStatus: 'Declined'
-    },
-  ],
-  files: [
-    { name: 'HACCP_Protocol_Draft_v3.pdf', size: '2.4 MB' },
-    { name: 'FDA_Guidelines_Summary.pdf', size: '1.8 MB' },
-  ],
-};
+interface Meeting {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  duration: string;
+  isVirtual: boolean;
+  meetingLink: string;
+  agenda: string[];
+  participants: { id: string; name: string; avatar: string; rsvpStatus: string }[];
+  files: { name: string; size: string }[];
+}
+
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatMeetingDate(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function formatTime(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function calculateDuration(start: string, end: string): string {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return '';
+  const diffMs = endDate.getTime() - startDate.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const hours = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+  if (hours > 0 && mins > 0) return `${hours} hour${hours > 1 ? 's' : ''} ${mins} minutes`;
+  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+  return `${mins} minutes`;
+}
+
+function mapMeeting(m: any): Meeting {
+  const participants = (m.participants || m.attendees || []).map((p: any) => {
+    const user = p.user || p;
+    const avatar = user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '';
+    return {
+      id: user.id || p.userId,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Participant',
+      avatar,
+      rsvpStatus: p.rsvpStatus || p.status || 'Pending',
+    };
+  });
+
+  const files = (m.attachments || m.files || []).map((f: any) => ({
+    name: f.name || f.filename || 'File',
+    size: f.size ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : '',
+  }));
+
+  return {
+    id: m.id,
+    title: m.title || m.name || 'Untitled Meeting',
+    description: m.description || m.content || '',
+    date: formatMeetingDate(m.startDate || m.date),
+    startTime: formatTime(m.startDate || m.startTime),
+    endTime: formatTime(m.endDate || m.endTime),
+    duration: calculateDuration(m.startDate, m.endDate) || m.duration || '',
+    isVirtual: m.isVirtual ?? m.isOnline ?? true,
+    meetingLink: m.meetingLink || m.link || '',
+    agenda: m.agenda || [],
+    participants,
+    files,
+  };
+}
 
 export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
   const [rsvpStatus, setRsvpStatus] = useState<'Attending' | 'Virtual' | 'InPerson' | 'NotAttending'>('Attending');
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMeeting();
+  }, [meetingId]);
+
+  const fetchMeeting = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any>(`/queries/meetings/${meetingId}`);
+      setMeeting(mapMeeting(data));
+    } catch (err) {
+      console.error('Failed to load meeting:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load meeting');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getRsvpColor = (status: string) => {
     switch (status) {
@@ -87,6 +139,32 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
         return 'bg-[#F5F5F5] text-[#757575]';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error || !meeting) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#757575]" />
+            </button>
+            <h2 className="ml-3">Meeting</h2>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error || 'Meeting not found'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -112,15 +190,15 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
 
       {/* Meeting Info Card */}
       <div className="bg-white px-4 py-4 mb-2">
-        <h1 className="mb-4">{mockMeeting.title}</h1>
+        <h1 className="mb-4">{meeting.title}</h1>
 
         {/* Date & Time */}
         <div className="flex items-start gap-3 mb-3">
           <CalendarIcon className="w-5 h-5 text-[#757575] mt-0.5" />
           <div>
-            <p className="text-[#212121]">{mockMeeting.date}</p>
+            <p className="text-[#212121]">{meeting.date}</p>
             <p className="text-sm text-[#757575]">
-              {mockMeeting.startTime} - {mockMeeting.endTime}
+              {meeting.startTime} - {meeting.endTime}
             </p>
           </div>
         </div>
@@ -128,12 +206,12 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
         {/* Duration */}
         <div className="flex items-center gap-3 mb-3">
           <Clock className="w-5 h-5 text-[#757575]" />
-          <p className="text-[#212121]">{mockMeeting.duration}</p>
+          <p className="text-[#212121]">{meeting.duration}</p>
         </div>
 
         {/* Location/Virtual */}
         <div className="flex items-center gap-3 mb-4">
-          {mockMeeting.isVirtual ? (
+          {meeting.isVirtual ? (
             <>
               <Video className="w-5 h-5 text-[#2196F3]" />
               <p className="text-[#2196F3]">Virtual Meeting</p>
@@ -147,7 +225,7 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
         </div>
 
         {/* Join Meeting Button */}
-        {mockMeeting.isVirtual && (
+        {meeting.isVirtual && (
           <Button className="w-full h-12 bg-[#2E7D32] hover:bg-[#1B5E20] mb-4">
             <Video className="w-5 h-5 mr-2" />
             Join Meeting
@@ -159,7 +237,7 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
       <div className="bg-white px-4 py-4 mb-2">
         <h3 className="mb-2">Description</h3>
         <p className="text-[#212121] leading-relaxed">
-          {mockMeeting.description}
+          {meeting.description}
         </p>
       </div>
 
@@ -167,7 +245,7 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
       <div className="bg-white px-4 py-4 mb-2">
         <h3 className="mb-3">Agenda</h3>
         <ul className="space-y-2">
-          {mockMeeting.agenda.map((item, index) => (
+          {meeting.agenda.map((item, index) => (
             <li key={index} className="flex items-start gap-3">
               <span className="w-6 h-6 bg-[#E8F5E9] text-[#2E7D32] rounded-full flex items-center justify-center flex-shrink-0 text-sm">
                 {index + 1}
@@ -239,9 +317,9 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
 
       {/* Participants */}
       <div className="bg-white px-4 py-4 mb-2">
-        <h3 className="mb-3">Participants ({mockMeeting.participants.length})</h3>
+        <h3 className="mb-3">Participants ({meeting.participants.length})</h3>
         <div className="space-y-3">
-          {mockMeeting.participants.map((participant) => (
+          {meeting.participants.map((participant) => (
             <div key={participant.id} className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar className="w-10 h-10">
@@ -261,7 +339,7 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
       <div className="bg-white px-4 py-4 mb-20">
         <h3 className="mb-3">Files</h3>
         <div className="space-y-2">
-          {mockMeeting.files.map((file, index) => (
+          {meeting.files.map((file, index) => (
             <div key={index} className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-lg">
               <div className="w-10 h-10 bg-[#D32F2F] rounded-lg flex items-center justify-center flex-shrink-0">
                 <span className="text-white text-xs">PDF</span>

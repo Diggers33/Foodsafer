@@ -1,6 +1,7 @@
-import { ArrowLeft, Search, MessageSquare } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, Search, MessageSquare, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { MessageThread } from './MessageThread';
+import { api } from '@/api';
 
 interface Conversation {
   id: string;
@@ -18,71 +19,56 @@ interface Conversation {
   unreadCount: number;
 }
 
-const mockConversations: Conversation[] = [
-  {
-    id: '1',
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function mapConversation(c: any): Conversation {
+  const participant = c.participant || c.otherUser || c.user || {};
+  const avatar = participant.avatar ? (participant.avatar.startsWith('http') ? participant.avatar : `${API_BASE}${participant.avatar}`) : '';
+  const participantName = `${participant.firstName || ''} ${participant.lastName || ''}`.trim() || participant.name || 'Unknown';
+
+  const lastMsg = c.lastMessage || c.latestMessage || {};
+
+  return {
+    id: c.id,
     participant: {
-      name: 'Sarah Johnson',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-      organization: 'FreshPro Organic Foods',
-      online: true,
+      name: participantName,
+      avatar,
+      organization: participant.organization || participant.company || '',
+      online: participant.online ?? participant.isOnline ?? false,
     },
     lastMessage: {
-      text: 'We\'re looking to improve our HACCP implementation...',
-      timestamp: '2026-01-13T10:35:00',
-      isRead: false,
+      text: lastMsg.text || lastMsg.content || lastMsg.message || '',
+      timestamp: lastMsg.createdAt || lastMsg.timestamp || c.updatedAt || '',
+      isRead: lastMsg.isRead ?? lastMsg.read ?? true,
     },
-    unreadCount: 2,
-  },
-  {
-    id: '2',
-    participant: {
-      name: 'Michael Chen',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
-      organization: 'SafetyFirst Lab Services',
-      online: false,
-    },
-    lastMessage: {
-      text: 'Thanks for the consultation yesterday!',
-      timestamp: '2026-01-12T16:20:00',
-      isRead: true,
-    },
-    unreadCount: 0,
-  },
-  {
-    id: '3',
-    participant: {
-      name: 'Emily Rodriguez',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-      organization: 'NutriGreen Solutions',
-      online: true,
-    },
-    lastMessage: {
-      text: 'Can you share that allergen control template?',
-      timestamp: '2026-01-12T14:15:00',
-      isRead: true,
-    },
-    unreadCount: 0,
-  },
-  {
-    id: '4',
-    participant: {
-      name: 'David Kim',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
-      organization: 'Pacific Food Safety Institute',
-      online: false,
-    },
-    lastMessage: {
-      text: 'Looking forward to the training session next week',
-      timestamp: '2026-01-11T09:30:00',
-      isRead: true,
-    },
-    unreadCount: 0,
-  },
-];
+    unreadCount: c.unreadCount || c.unreadMessages || 0,
+  };
+}
 
 export function MessagesList({ onBack }: { onBack: () => void }) {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  const fetchConversations = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>('/queries/conversations');
+      const dataArray = Array.isArray(data) ? data : [];
+      setConversations(dataArray.map(mapConversation));
+    } catch (err) {
+      console.error('Failed to load conversations:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load conversations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedConversation) {
     return (
@@ -94,7 +80,16 @@ export function MessagesList({ onBack }: { onBack: () => void }) {
   }
 
   const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
+    if (!timestamp) return '';
+    let date: Date;
+    const ddmmyyyyMatch = timestamp.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+    if (ddmmyyyyMatch) {
+      const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+      date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+    } else {
+      date = new Date(timestamp);
+    }
+    if (isNaN(date.getTime())) return timestamp;
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
@@ -106,6 +101,32 @@ export function MessagesList({ onBack }: { onBack: () => void }) {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#212121]" />
+            </button>
+            <h1 className="ml-3">Messages</h1>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -128,7 +149,7 @@ export function MessagesList({ onBack }: { onBack: () => void }) {
 
       {/* Conversations List */}
       <div className="px-4 py-4 space-y-2">
-        {mockConversations.map((conversation) => (
+        {conversations.map((conversation) => (
           <article
             key={conversation.id}
             onClick={() => setSelectedConversation(conversation.id)}
@@ -178,7 +199,7 @@ export function MessagesList({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* Empty State (if no conversations) */}
-      {mockConversations.length === 0 && (
+      {conversations.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 px-4">
           <MessageSquare className="w-16 h-16 text-[#757575] mb-4" />
           <h3 className="text-center mb-2">No Messages Yet</h3>

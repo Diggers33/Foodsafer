@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ArrowLeft, Search, Filter, Download, BookOpen, Clock, Users, Star } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Search, Filter, Download, BookOpen, Clock, Users, Star, Loader2 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { FrameworkDetail } from './FrameworkDetail';
+import { api } from '@/api';
 
 interface Framework {
   id: string;
@@ -17,72 +18,58 @@ interface Framework {
   featured: boolean;
 }
 
-const mockFrameworks: Framework[] = [
-  {
-    id: '1',
-    title: 'HACCP Implementation Guide 2026',
-    description: 'Comprehensive guide for implementing Hazard Analysis and Critical Control Points in food facilities',
-    category: 'HACCP',
-    thumbnail: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=300&fit=crop',
-    duration: '45 min read',
-    users: 1247,
-    rating: 4.8,
-    lastUpdated: '2026-01-10',
-    featured: true,
-  },
-  {
-    id: '2',
-    title: 'Allergen Control Framework',
-    description: 'Step-by-step framework for managing allergens and preventing cross-contamination',
-    category: 'Allergens',
-    thumbnail: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400&h=300&fit=crop',
-    duration: '30 min read',
-    users: 892,
-    rating: 4.9,
-    lastUpdated: '2026-01-08',
-    featured: true,
-  },
-  {
-    id: '3',
-    title: 'Food Traceability System Design',
-    description: 'Framework for implementing end-to-end traceability in food supply chains',
-    category: 'Traceability',
-    thumbnail: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=300&fit=crop',
-    duration: '60 min read',
-    users: 634,
-    rating: 4.7,
-    lastUpdated: '2026-01-05',
-    featured: false,
-  },
-  {
-    id: '4',
-    title: 'Quality Management Standards',
-    description: 'ISO 22000 and FSSC 22000 implementation framework for food safety management',
-    category: 'Quality',
-    thumbnail: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=400&h=300&fit=crop',
-    duration: '50 min read',
-    users: 1089,
-    rating: 4.8,
-    lastUpdated: '2026-01-03',
-    featured: false,
-  },
-  {
-    id: '5',
-    title: 'Sanitation & Hygiene Protocols',
-    description: 'Best practices framework for maintaining sanitation standards in food facilities',
-    category: 'Sanitation',
-    thumbnail: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400&h=300&fit=crop',
-    duration: '35 min read',
-    users: 756,
-    rating: 4.6,
-    lastUpdated: '2025-12-28',
-    featured: false,
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatDuration(minutes: number): string {
+  if (!minutes) return '';
+  if (minutes < 60) return `${minutes} min read`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h read`;
+}
+
+function mapFramework(f: any): Framework {
+  const thumbnail = f.thumbnail || f.image || f.cover;
+  const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
+
+  return {
+    id: f.id,
+    title: f.title || f.name || 'Untitled Framework',
+    description: f.description || f.content || '',
+    category: f.category || f.type || 'General',
+    thumbnail: thumbUrl,
+    duration: formatDuration(f.duration || f.readTime || 0),
+    users: f.usersCount || f.users || f.viewsCount || 0,
+    rating: f.rating || f.averageRating || 0,
+    lastUpdated: f.updatedAt || f.createdAt || '',
+    featured: f.featured ?? f.isFeatured ?? false,
+  };
+}
 
 export function FrameworkList({ onBack }: { onBack: () => void }) {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedFramework, setSelectedFramework] = useState<string | null>(null);
+  const [frameworks, setFrameworks] = useState<Framework[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchFrameworks();
+  }, []);
+
+  const fetchFrameworks = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>('/queries/frameworks');
+      const dataArray = Array.isArray(data) ? data : [];
+      setFrameworks(dataArray.map(mapFramework));
+    } catch (err) {
+      console.error('Failed to load frameworks:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load frameworks');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedFramework) {
     return (
@@ -94,8 +81,34 @@ export function FrameworkList({ onBack }: { onBack: () => void }) {
   }
 
   const filteredFrameworks = activeTab === 'featured'
-    ? mockFrameworks.filter(f => f.featured)
-    : mockFrameworks;
+    ? frameworks.filter(f => f.featured)
+    : frameworks;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#212121]" />
+            </button>
+            <h1 className="ml-3">Framework</h1>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">

@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ArrowLeft, Search, Filter, ExternalLink, Star, Download, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Search, Filter, ExternalLink, Star, Download, Users, Loader2 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { api } from '@/api';
 
 interface Tool {
   id: string;
@@ -15,81 +16,79 @@ interface Tool {
   url: string;
 }
 
-const mockTools: Tool[] = [
-  {
-    id: '1',
-    name: 'Temperature Monitoring Logger',
-    description: 'Digital tool for tracking and logging temperature readings across your facility',
-    category: 'Monitoring',
-    icon: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=400&fit=crop',
-    rating: 4.7,
-    downloads: 3421,
-    isPremium: false,
-    url: 'https://example.com/temp-logger',
-  },
-  {
-    id: '2',
-    name: 'Allergen Cross-Contact Calculator',
-    description: 'Calculate risk levels for allergen cross-contact in shared equipment',
-    category: 'Allergens',
-    icon: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=400&fit=crop',
-    rating: 4.9,
-    downloads: 2156,
-    isPremium: true,
-    url: 'https://example.com/allergen-calc',
-  },
-  {
-    id: '3',
-    name: 'HACCP Plan Builder',
-    description: 'Interactive tool to build comprehensive HACCP plans step-by-step',
-    category: 'HACCP',
-    icon: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=400&fit=crop',
-    rating: 4.8,
-    downloads: 5234,
-    isPremium: true,
-    url: 'https://example.com/haccp-builder',
-  },
-  {
-    id: '4',
-    name: 'Sanitation Schedule Manager',
-    description: 'Create and manage cleaning schedules with automated reminders',
-    category: 'Sanitation',
-    icon: 'https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=400&h=400&fit=crop',
-    rating: 4.6,
-    downloads: 1897,
-    isPremium: false,
-    url: 'https://example.com/sanitation',
-  },
-  {
-    id: '5',
-    name: 'Shelf Life Calculator',
-    description: 'Calculate product shelf life based on storage conditions and ingredients',
-    category: 'Quality',
-    icon: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=400&fit=crop',
-    rating: 4.5,
-    downloads: 2678,
-    isPremium: false,
-    url: 'https://example.com/shelf-life',
-  },
-  {
-    id: '6',
-    name: 'Supplier Audit Checklist',
-    description: 'Comprehensive digital checklist for conducting supplier audits',
-    category: 'Compliance',
-    icon: 'https://images.unsplash.com/photo-1507925921958-8a62f3d1a50d?w=400&h=400&fit=crop',
-    rating: 4.7,
-    downloads: 1543,
-    isPremium: true,
-    url: 'https://example.com/audit-checklist',
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function mapTool(t: any): Tool {
+  const icon = t.icon || t.image || t.thumbnail;
+  const iconUrl = icon ? (icon.startsWith('http') ? icon : `${API_BASE}${icon}`) : '';
+
+  return {
+    id: t.id,
+    name: t.name || t.title || 'Untitled Tool',
+    description: t.description || t.content || '',
+    category: t.category || t.type || 'General',
+    icon: iconUrl,
+    rating: t.rating || t.averageRating || 0,
+    downloads: t.downloads || t.downloadsCount || t.usersCount || 0,
+    isPremium: t.isPremium ?? t.premium ?? false,
+    url: t.url || t.link || '',
+  };
+}
 
 export function ToolkitList({ onBack }: { onBack: () => void }) {
   const [activeTab, setActiveTab] = useState('all');
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchTools();
+  }, []);
+
+  const fetchTools = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>('/queries/tools');
+      const dataArray = Array.isArray(data) ? data : [];
+      setTools(dataArray.map(mapTool));
+    } catch (err) {
+      console.error('Failed to load tools:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load tools');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredTools = activeTab === 'premium'
-    ? mockTools.filter(t => t.isPremium)
-    : mockTools;
+    ? tools.filter(t => t.isPremium)
+    : tools;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2196F3]" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#212121]" />
+            </button>
+            <h1 className="ml-3">Toolkit</h1>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">

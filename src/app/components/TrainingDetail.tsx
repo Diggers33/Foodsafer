@@ -1,7 +1,8 @@
-import { ArrowLeft, Share2, Bookmark, Clock, Users, Star, Award, BookOpen, Play, CheckCircle, Lock } from 'lucide-react';
+import { ArrowLeft, Share2, Bookmark, Clock, Users, Star, Award, BookOpen, Play, CheckCircle, Lock, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { api } from '@/api';
 
 interface CourseData {
   id: string;
@@ -33,64 +34,109 @@ interface CourseData {
   }>;
 }
 
-const mockCourseData: Record<string, CourseData> = {
-  '1': {
-    id: '1',
-    title: 'HACCP Fundamentals Certification',
-    description: 'Complete certification course covering all seven principles of HACCP. Learn to identify hazards, establish critical control points, and implement effective food safety management systems.',
-    instructor: {
-      name: 'Dr. Maria Rodriguez',
-      title: 'Food Safety Expert',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-    },
-    thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&h=400&fit=crop',
-    duration: '8 hours',
-    students: 2456,
-    rating: 4.9,
-    level: 'Beginner',
-    lessons: 24,
-    certified: true,
-    progress: 0,
-    modules: [
-      {
-        id: '1',
-        title: 'Introduction to HACCP',
-        lessons: [
-          { id: '1-1', title: 'What is HACCP?', duration: '12 min', completed: false, locked: false },
-          { id: '1-2', title: 'History and Development', duration: '10 min', completed: false, locked: false },
-          { id: '1-3', title: 'HACCP Regulations', duration: '15 min', completed: false, locked: false },
-        ],
-      },
-      {
-        id: '2',
-        title: 'The Seven Principles',
-        lessons: [
-          { id: '2-1', title: 'Principle 1: Hazard Analysis', duration: '20 min', completed: false, locked: true },
-          { id: '2-2', title: 'Principle 2: Critical Control Points', duration: '18 min', completed: false, locked: true },
-          { id: '2-3', title: 'Principle 3: Critical Limits', duration: '15 min', completed: false, locked: true },
-          { id: '2-4', title: 'Principle 4: Monitoring', duration: '16 min', completed: false, locked: true },
-          { id: '2-5', title: 'Principle 5: Corrective Actions', duration: '14 min', completed: false, locked: true },
-          { id: '2-6', title: 'Principle 6: Verification', duration: '17 min', completed: false, locked: true },
-          { id: '2-7', title: 'Principle 7: Record Keeping', duration: '13 min', completed: false, locked: true },
-        ],
-      },
-      {
-        id: '3',
-        title: 'Practical Implementation',
-        lessons: [
-          { id: '3-1', title: 'Building Your HACCP Team', duration: '15 min', completed: false, locked: true },
-          { id: '3-2', title: 'Product Description', duration: '12 min', completed: false, locked: true },
-          { id: '3-3', title: 'Process Flow Diagrams', duration: '18 min', completed: false, locked: true },
-          { id: '3-4', title: 'Case Study: Dairy Processing', duration: '25 min', completed: false, locked: true },
-        ],
-      },
-    ],
-  },
-};
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatDuration(minutes: number): string {
+  if (!minutes) return '';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours} hours`;
+}
+
+function mapCourse(t: any): CourseData {
+  const instructor = t.instructor || t.creator || {};
+  const instructorName = typeof instructor === 'string'
+    ? instructor
+    : `${instructor.firstName || ''} ${instructor.lastName || ''}`.trim() || 'Unknown';
+  const instructorTitle = instructor.title || instructor.jobTitle || 'Instructor';
+  const instructorAvatar = instructor.avatar
+    ? (instructor.avatar.startsWith('http') ? instructor.avatar : `${API_BASE}${instructor.avatar}`)
+    : '';
+
+  const thumbnail = t.thumbnail || t.image || t.cover;
+  const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
+
+  const modules = (t.modules || t.sections || []).map((m: any, mIdx: number) => ({
+    id: m.id || String(mIdx + 1),
+    title: m.title || m.name || `Module ${mIdx + 1}`,
+    lessons: (m.lessons || m.items || []).map((l: any, lIdx: number) => ({
+      id: l.id || `${mIdx + 1}-${lIdx + 1}`,
+      title: l.title || l.name || `Lesson ${lIdx + 1}`,
+      duration: l.duration ? `${l.duration} min` : '',
+      completed: l.completed ?? false,
+      locked: l.locked ?? (mIdx > 0),
+    })),
+  }));
+
+  const totalLessons = modules.reduce((acc: number, m: any) => acc + m.lessons.length, 0);
+
+  return {
+    id: t.id,
+    title: t.title || t.name || 'Untitled Course',
+    description: t.description || t.content || '',
+    instructor: { name: instructorName, title: instructorTitle, avatar: instructorAvatar },
+    thumbnail: thumbUrl,
+    duration: formatDuration(t.duration || t.durationMinutes || 0),
+    students: t.enrolledCount || t.students || t.participantsCount || 0,
+    rating: t.rating || t.averageRating || 0,
+    level: t.level || t.difficulty || 'Beginner',
+    lessons: t.lessonsCount || totalLessons || 0,
+    certified: t.certified ?? t.hasCertificate ?? false,
+    progress: t.progress || 0,
+    modules,
+  };
+}
 
 export function TrainingDetail({ courseId, onBack }: { courseId: string; onBack: () => void }) {
   const [isSaved, setIsSaved] = useState(false);
-  const course = mockCourseData[courseId] || mockCourseData['1'];
+  const [course, setCourse] = useState<CourseData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchCourse();
+  }, [courseId]);
+
+  const fetchCourse = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any>(`/queries/trainings/${courseId}`);
+      setCourse(mapCourse(data));
+    } catch (err) {
+      console.error('Failed to load course:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load course');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#FF9800]" />
+      </div>
+    );
+  }
+
+  if (error || !course) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#212121]" />
+            </button>
+            <h2 className="ml-3">Course</h2>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error || 'Course not found'}</p>
+        </div>
+      </div>
+    );
+  }
 
   const getLevelColor = (level: string) => {
     switch (level) {

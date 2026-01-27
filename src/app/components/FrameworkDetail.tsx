@@ -1,7 +1,8 @@
-import { ArrowLeft, Download, Share2, Bookmark, Clock, Users, Star, Calendar, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Download, Share2, Bookmark, Clock, Users, Star, Calendar, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { api } from '@/api';
 
 interface FrameworkData {
   id: string;
@@ -30,50 +31,118 @@ interface FrameworkData {
   }>;
 }
 
-const mockFrameworkData: Record<string, FrameworkData> = {
-  '1': {
-    id: '1',
-    title: 'HACCP Implementation Guide 2026',
-    description: 'Comprehensive guide for implementing Hazard Analysis and Critical Control Points in food facilities. This framework covers the seven principles of HACCP, detailed implementation steps, monitoring procedures, and verification methods.',
-    category: 'HACCP',
-    thumbnail: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&h=400&fit=crop',
-    duration: '45 min read',
-    users: 1247,
-    rating: 4.8,
-    lastUpdated: 'January 10, 2026',
-    author: {
-      name: 'Dr. Maria Rodriguez',
-      organization: 'Global Food Standards',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-    },
-    sections: [
-      { id: '1', title: 'Introduction to HACCP', duration: '8 min' },
-      { id: '2', title: 'Principle 1: Conduct Hazard Analysis', duration: '10 min' },
-      { id: '3', title: 'Principle 2: Determine Critical Control Points', duration: '8 min' },
-      { id: '4', title: 'Principle 3: Establish Critical Limits', duration: '7 min' },
-      { id: '5', title: 'Principle 4: Monitoring Procedures', duration: '6 min' },
-      { id: '6', title: 'Principle 5: Corrective Actions', duration: '5 min' },
-      { id: '7', title: 'Principle 6: Verification Procedures', duration: '6 min' },
-      { id: '8', title: 'Principle 7: Record Keeping', duration: '5 min' },
-    ],
-    relatedFrameworks: [
-      {
-        id: '2',
-        title: 'Allergen Control Framework',
-        thumbnail: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400&h=300&fit=crop',
-      },
-      {
-        id: '4',
-        title: 'Quality Management Standards',
-        thumbnail: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=400&h=300&fit=crop',
-      },
-    ],
-  },
-};
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatDate(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function formatDuration(minutes: number): string {
+  if (!minutes) return '';
+  if (minutes < 60) return `${minutes} min read`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h read`;
+}
+
+function mapFramework(f: any): FrameworkData {
+  const thumbnail = f.thumbnail || f.image || f.cover;
+  const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
+
+  const creator = f.creator || f.author || {};
+  const authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.name || 'Unknown';
+  const authorOrg = creator.organization || creator.company || '';
+  const authorAvatar = creator.avatar ? (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`) : '';
+
+  const sections = (f.sections || f.chapters || []).map((s: any, idx: number) => ({
+    id: s.id || String(idx + 1),
+    title: s.title || s.name || `Section ${idx + 1}`,
+    duration: s.duration ? `${s.duration} min` : '',
+  }));
+
+  const relatedFrameworks = (f.relatedFrameworks || f.related || []).map((r: any) => {
+    const relThumb = r.thumbnail || r.image || r.cover;
+    return {
+      id: r.id,
+      title: r.title || r.name || 'Related Framework',
+      thumbnail: relThumb ? (relThumb.startsWith('http') ? relThumb : `${API_BASE}${relThumb}`) : '',
+    };
+  });
+
+  return {
+    id: f.id,
+    title: f.title || f.name || 'Untitled Framework',
+    description: f.description || f.content || '',
+    category: f.category || f.type || 'General',
+    thumbnail: thumbUrl,
+    duration: formatDuration(f.duration || f.readTime || 0),
+    users: f.usersCount || f.users || f.viewsCount || 0,
+    rating: f.rating || f.averageRating || 0,
+    lastUpdated: formatDate(f.updatedAt || f.createdAt || ''),
+    author: { name: authorName, organization: authorOrg, avatar: authorAvatar },
+    sections,
+    relatedFrameworks,
+  };
+}
 
 export function FrameworkDetail({ frameworkId, onBack }: { frameworkId: string; onBack: () => void }) {
   const [isSaved, setIsSaved] = useState(false);
-  const framework = mockFrameworkData[frameworkId] || mockFrameworkData['1'];
+  const [framework, setFramework] = useState<FrameworkData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchFramework();
+  }, [frameworkId]);
+
+  const fetchFramework = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any>(`/queries/frameworks/${frameworkId}`);
+      setFramework(mapFramework(data));
+    } catch (err) {
+      console.error('Failed to load framework:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load framework');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error || !framework) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#212121]" />
+            </button>
+            <h2 className="ml-3">Framework</h2>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error || 'Framework not found'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">

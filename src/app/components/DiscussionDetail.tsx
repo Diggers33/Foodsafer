@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ArrowLeft, Star, MoreVertical, Smile, Paperclip, Send, Heart, ThumbsUp, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Star, MoreVertical, Smile, Paperclip, Send, Heart, ThumbsUp, Check, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
+import { api } from '@/api';
 
 interface DiscussionDetailProps {
   discussionId: string;
@@ -21,84 +22,141 @@ interface Reply {
   replies?: Reply[];
 }
 
-const mockDiscussion = {
-  id: '1',
-  title: 'Updated HACCP Protocol for Allergen Management',
+interface Discussion {
+  id: string;
+  title: string;
   author: {
-    name: 'Dr. Maria Rodriguez',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-  },
-  timestamp: '2 hours ago',
-  content: `I've drafted an updated HACCP protocol specifically focused on allergen management based on the new FDA guidelines released this month. 
+    name: string;
+    avatar: string;
+  };
+  timestamp: string;
+  content: string;
+  attachments: { name: string; size: string }[];
+  tags: string[];
+  reactions: { emoji: string; count: number }[];
+}
 
-Key updates include:
-- Enhanced cleaning and sanitation procedures between allergen runs
-- Updated allergen declaration requirements
-- New documentation standards for allergen control
-- Modified training requirements for staff
+const API_BASE = 'https://test.foodsafer.com/api';
 
-Please review the attached document and provide your feedback. We need to finalize this by end of week for implementation across all facilities.
+function formatTimeAgo(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
 
-Looking forward to your thoughts!`,
-  attachments: [
-    { name: 'HACCP_Allergen_Protocol_v3.pdf', size: '2.4 MB' },
-  ],
-  tags: ['HACCP', 'Allergens', 'Protocol'],
-  reactions: [
-    { emoji: '👍', count: 8 },
-    { emoji: '❤️', count: 3 },
-    { emoji: '✓', count: 5 },
-  ],
-};
+function mapDiscussion(d: any): Discussion {
+  const creator = d.creator || d.author || {};
+  const authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || 'Unknown';
+  const avatar = creator.avatar ? (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`) : '';
 
-const mockReplies: Reply[] = [
-  {
-    id: '1',
-    author: {
-      name: 'James Chen',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-    },
-    content: 'Great work Maria! I\'ve reviewed the protocol and it looks comprehensive. One suggestion: should we add specific guidance for dedicated allergen-free production lines?',
-    timestamp: '1 hour ago',
-    reactions: [{ emoji: '👍', count: 4 }],
-    replies: [
-      {
-        id: '1-1',
-        author: {
-          name: 'Dr. Maria Rodriguez',
-          avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-        },
-        content: 'Excellent point James! I\'ll add a section on dedicated line management. Can you share any specific requirements from your facility?',
-        timestamp: '45 minutes ago',
-        reactions: [],
-      },
-    ],
-  },
-  {
-    id: '2',
-    author: {
-      name: 'Sarah Johnson',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-    },
-    content: 'This is very thorough. I especially like the updated training requirements section. We\'ve been implementing something similar at our West Coast facilities and it\'s been effective.',
-    timestamp: '30 minutes ago',
-    reactions: [{ emoji: '❤️', count: 2 }],
-  },
-  {
-    id: '3',
-    author: {
-      name: 'Emily Davis',
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop',
-    },
-    content: 'Quick question - will this replace the existing protocol entirely or supplement it? Want to make sure our documentation is updated correctly.',
-    timestamp: '15 minutes ago',
-    reactions: [],
-  },
-];
+  return {
+    id: d.id,
+    title: d.title || d.name || 'Untitled',
+    author: { name: authorName, avatar },
+    timestamp: formatTimeAgo(d.createdAt || d.updatedAt),
+    content: d.text || d.content || d.description || '',
+    attachments: (d.attachments || []).map((a: any) => ({
+      name: a.name || a.filename || 'Attachment',
+      size: a.size ? `${(a.size / 1024 / 1024).toFixed(1)} MB` : '',
+    })),
+    tags: d.tags || [],
+    reactions: d.reactions || [],
+  };
+}
+
+function mapReply(c: any): Reply {
+  const creator = c.creator || c.author || c.user || {};
+  const authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || 'Unknown';
+  const avatar = creator.avatar ? (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`) : '';
+
+  return {
+    id: c.id,
+    author: { name: authorName, avatar },
+    content: c.text || c.content || '',
+    timestamp: formatTimeAgo(c.createdAt || c.updatedAt),
+    reactions: c.reactions || [],
+    replies: (c.replies || c.children || []).map(mapReply),
+  };
+}
 
 export function DiscussionDetail({ discussionId, onBack }: DiscussionDetailProps) {
   const [isFollowing, setIsFollowing] = useState(true);
   const [replyText, setReplyText] = useState('');
+  const [discussion, setDiscussion] = useState<Discussion | null>(null);
+  const [replies, setReplies] = useState<Reply[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchDiscussion();
+  }, [discussionId]);
+
+  const fetchDiscussion = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any>(`/queries/discussions/${discussionId}`);
+      setDiscussion(mapDiscussion(data));
+
+      // Fetch comments/replies
+      try {
+        const commentsData = await api.get<any[]>(`/queries/discussions/${discussionId}/comments`);
+        const commentsArray = Array.isArray(commentsData) ? commentsData : [];
+        setReplies(commentsArray.map(mapReply));
+      } catch {
+        // Comments endpoint may not exist
+        setReplies([]);
+      }
+    } catch (err) {
+      console.error('Failed to load discussion:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load discussion');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error || !discussion) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#757575]" />
+            </button>
+            <h2 className="ml-3">Discussion</h2>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error || 'Discussion not found'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -131,26 +189,26 @@ export function DiscussionDetail({ discussionId, onBack }: DiscussionDetailProps
         {/* Author Info */}
         <div className="flex items-start gap-3 mb-3">
           <Avatar className="w-10 h-10">
-            <img src={mockDiscussion.author.avatar} alt={mockDiscussion.author.name} className="w-full h-full object-cover" />
+            <img src={discussion.author.avatar} alt={discussion.author.name} className="w-full h-full object-cover" />
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h4>{mockDiscussion.author.name}</h4>
-            <p className="text-sm text-[#757575]">{mockDiscussion.timestamp}</p>
+            <h4>{discussion.author.name}</h4>
+            <p className="text-sm text-[#757575]">{discussion.timestamp}</p>
           </div>
         </div>
 
         {/* Title */}
-        <h2 className="mb-3">{mockDiscussion.title}</h2>
+        <h2 className="mb-3">{discussion.title}</h2>
 
         {/* Content */}
         <div className="text-[#212121] leading-relaxed mb-4 whitespace-pre-line">
-          {mockDiscussion.content}
+          {discussion.content}
         </div>
 
         {/* Attachments */}
-        {mockDiscussion.attachments.length > 0 && (
+        {discussion.attachments.length > 0 && (
           <div className="mb-4 space-y-2">
-            {mockDiscussion.attachments.map((attachment, index) => (
+            {discussion.attachments.map((attachment, index) => (
               <div
                 key={index}
                 className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-lg"
@@ -167,7 +225,7 @@ export function DiscussionDetail({ discussionId, onBack }: DiscussionDetailProps
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2 mb-4">
-          {mockDiscussion.tags.map((tag) => (
+          {discussion.tags.map((tag) => (
             <Badge
               key={tag}
               variant="secondary"
@@ -180,7 +238,7 @@ export function DiscussionDetail({ discussionId, onBack }: DiscussionDetailProps
 
         {/* Reactions */}
         <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-          {mockDiscussion.reactions.map((reaction, index) => (
+          {discussion.reactions.map((reaction, index) => (
             <button
               key={index}
               className="flex items-center gap-1 px-3 py-1.5 bg-[#F5F5F5] hover:bg-gray-200 rounded-full"
@@ -198,9 +256,9 @@ export function DiscussionDetail({ discussionId, onBack }: DiscussionDetailProps
 
       {/* Replies Section */}
       <div className="bg-white px-4 py-4 mb-20">
-        <h3 className="mb-4">Replies ({mockReplies.length})</h3>
+        <h3 className="mb-4">Replies ({replies.length})</h3>
         <div className="space-y-4">
-          {mockReplies.map((reply) => (
+          {replies.map((reply) => (
             <ReplyItem key={reply.id} reply={reply} />
           ))}
         </div>

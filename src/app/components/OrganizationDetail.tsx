@@ -1,8 +1,9 @@
-import { ArrowLeft, MapPin, Phone, Mail, Globe, Users, Calendar, Building2, CheckCircle, MessageSquare, Share2, Star } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, Globe, Users, Calendar, Building2, CheckCircle, MessageSquare, Share2, Star, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { api } from '@/api';
 
 interface OrganizationData {
   id: string;
@@ -40,77 +41,107 @@ interface OrganizationData {
   }>;
 }
 
-const mockOrgData: Record<string, OrganizationData> = {
-  '1': {
-    id: '1',
-    name: 'FreshPro Organic Foods',
-    category: 'Food Manufacturer',
-    description: 'Leading organic food manufacturer specializing in fresh produce and sustainable farming practices. Committed to food safety excellence and environmental responsibility.',
-    location: 'Portland, OR',
-    distance: '2.3 mi',
-    thumbnail: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=300&fit=crop',
-    coverImage: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&h=400&fit=crop',
-    verified: true,
-    rating: 4.8,
-    reviews: 142,
-    connections: 856,
-    founded: '2015',
-    size: '201-500 employees',
-    specialties: ['Organic Certification', 'HACCP', 'SQF Level 3', 'USDA Organic'],
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function mapOrganization(c: any): OrganizationData {
+  const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
+  const cover = c.coverImage || c.cover || c.logo;
+  const coverUrl = cover ? (cover.startsWith('http') ? cover : `${API_BASE}${cover}`) : '';
+
+  const team = (c.members || c.employees || []).slice(0, 5).map((m: any) => {
+    const user = m.user || m;
+    const avatar = user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '';
+    return {
+      id: user.id || m.userId,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Team Member',
+      role: user.jobTitle || m.role || '',
+      avatar,
+    };
+  });
+
+  return {
+    id: c.id,
+    name: c.name || 'Unknown Organization',
+    category: c.type || c.category || 'Organization',
+    description: c.description || c.about || '',
+    location: c.address || c.city || c.country || '',
+    distance: '',
+    thumbnail: logo,
+    coverImage: coverUrl || logo,
+    verified: c.verified ?? c.isVerified ?? false,
+    rating: c.rating || c.averageRating || 0,
+    reviews: c.reviewsCount || c.reviews || 0,
+    connections: c.connectionsCount || c.connections || 0,
+    founded: c.foundedYear || c.founded || '',
+    size: c.size || c.employeeCount || '',
+    specialties: c.specialties || c.certifications || c.tags || [],
     contact: {
-      phone: '+1 (555) 123-4567',
-      email: 'info@freshpro.com',
-      website: 'www.freshpro.com',
-      address: '1234 Green Valley Rd, Portland, OR 97201',
+      phone: c.phone || c.phoneNumber || '',
+      email: c.email || '',
+      website: c.website || c.url || '',
+      address: c.fullAddress || c.address || '',
     },
-    recentActivity: [
-      {
-        id: '1',
-        type: 'certification',
-        title: 'Received SQF Level 3 Certification',
-        date: '2026-01-08',
-      },
-      {
-        id: '2',
-        type: 'post',
-        title: 'Published HACCP implementation case study',
-        date: '2026-01-05',
-      },
-      {
-        id: '3',
-        type: 'event',
-        title: 'Hosting Food Safety Workshop',
-        date: '2026-01-15',
-      },
-    ],
-    team: [
-      {
-        id: '1',
-        name: 'Sarah Johnson',
-        role: 'Food Safety Manager',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-      },
-      {
-        id: '2',
-        name: 'Michael Chen',
-        role: 'Quality Assurance Director',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
-      },
-      {
-        id: '3',
-        name: 'Emily Rodriguez',
-        role: 'Compliance Specialist',
-        avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-      },
-    ],
-  },
-};
+    recentActivity: (c.activities || c.posts || []).slice(0, 5).map((a: any) => ({
+      id: a.id,
+      type: a.type || 'post',
+      title: a.title || a.text || '',
+      date: a.createdAt || a.date || '',
+    })),
+    team,
+  };
+}
 
 export function OrganizationDetail({ orgId, onBack }: { orgId: string; onBack: () => void }) {
   const [isConnected, setIsConnected] = useState(false);
   const [activeTab, setActiveTab] = useState('about');
   const [showMessageComposer, setShowMessageComposer] = useState(false);
-  const org = mockOrgData[orgId] || mockOrgData['1'];
+  const [org, setOrg] = useState<OrganizationData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchOrganization();
+  }, [orgId]);
+
+  const fetchOrganization = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any>(`/queries/companies/${orgId}`);
+      setOrg(mapOrganization(data));
+    } catch (err) {
+      console.error('Failed to load organization:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load organization');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error || !org) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#212121]" />
+            </button>
+            <h2 className="ml-3">Organization</h2>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error || 'Organization not found'}</p>
+        </div>
+      </div>
+    );
+  }
 
   // Handle message compose
   if (showMessageComposer) {

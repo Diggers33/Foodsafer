@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ArrowLeft, Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Edit2, Trash2, Flag, Copy, BellOff, UserX, X, Send, ThumbsUp, Lightbulb, PartyPopper, ThumbsDown, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Edit2, Trash2, Flag, Copy, BellOff, UserX, X, Send, ThumbsUp, Lightbulb, PartyPopper, ThumbsDown, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { LinkedInStylePost } from './LinkedInStylePost';
+import { api } from '@/api';
 
 interface Post {
   id: string;
@@ -34,12 +35,21 @@ interface Comment {
   isOwn: boolean;
 }
 
+interface Reactor {
+  name: string;
+  avatar: string;
+  type: string;
+  organization?: string;
+}
+
 interface PostDetailViewProps {
   postId: string;
   onBack: () => void;
   posts: Post[];
   setPosts: (posts: Post[]) => void;
 }
+
+const API_BASE = 'https://test.foodsafer.com/api';
 
 const reactionTypes = [
   { id: 'like', label: 'Like', icon: ThumbsUp, color: '#36B9D0' },
@@ -49,11 +59,17 @@ const reactionTypes = [
   { id: 'inappropriate', label: 'Inappropriate', icon: AlertTriangle, color: '#D32F2F' },
 ];
 
-const mockReactors = [
-  { name: 'Sarah Johnson', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop', type: 'like' },
-  { name: 'Mike Chen', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop', type: 'recommend' },
-  { name: 'Emma Davis', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop', type: 'insightful' },
-];
+function mapReactor(r: any): Reactor {
+  const user = r.user || r;
+  const avatar = user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '';
+  const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'Unknown';
+  return {
+    name,
+    avatar,
+    type: r.type || r.reactionType || 'like',
+    organization: user.organization || user.company || 'Food Safety Professional',
+  };
+}
 
 export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailViewProps) {
   const post = posts.find(p => p.id === postId);
@@ -71,6 +87,28 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
   const [editCommentText, setEditCommentText] = useState('');
   const [showEditPost, setShowEditPost] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [reactors, setReactors] = useState<Reactor[]>([]);
+  const [isLoadingReactors, setIsLoadingReactors] = useState(false);
+
+  useEffect(() => {
+    if (showReactions && reactors.length === 0) {
+      fetchReactors();
+    }
+  }, [showReactions]);
+
+  const fetchReactors = async () => {
+    setIsLoadingReactors(true);
+    try {
+      const data = await api.get<any[]>(`/queries/posts/${postId}/reactions`);
+      const dataArray = Array.isArray(data) ? data : [];
+      setReactors(dataArray.map(mapReactor));
+    } catch (err) {
+      console.error('Failed to load reactions:', err);
+      // Keep empty array if fetch fails
+    } finally {
+      setIsLoadingReactors(false);
+    }
+  };
 
   if (!post) return null;
 
@@ -422,31 +460,39 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
         {showReactions && (
           <div className="bg-white rounded-lg shadow-sm p-4">
             <h4 className="mb-3">Reactions</h4>
-            <div className="space-y-3">
-              {mockReactors.map((reactor, idx) => {
-                const reactionType = reactionTypes.find(r => r.id === reactor.type);
-                const Icon = reactionType?.icon || ThumbsUp;
-                return (
-                  <div key={idx} className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar className="w-10 h-10">
-                        <img src={reactor.avatar} alt={reactor.name} className="w-full h-full object-cover" />
-                      </Avatar>
-                      <div 
-                        className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center"
-                        style={{ backgroundColor: reactionType?.color }}
-                      >
-                        <Icon className="w-3 h-3 text-white" />
+            {isLoadingReactors ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+              </div>
+            ) : reactors.length === 0 ? (
+              <p className="text-sm text-[#757575] text-center py-4">No reactions yet</p>
+            ) : (
+              <div className="space-y-3">
+                {reactors.map((reactor, idx) => {
+                  const reactionType = reactionTypes.find(r => r.id === reactor.type);
+                  const Icon = reactionType?.icon || ThumbsUp;
+                  return (
+                    <div key={idx} className="flex items-center gap-3">
+                      <div className="relative">
+                        <Avatar className="w-10 h-10">
+                          <img src={reactor.avatar} alt={reactor.name} className="w-full h-full object-cover" />
+                        </Avatar>
+                        <div
+                          className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center"
+                          style={{ backgroundColor: reactionType?.color }}
+                        >
+                          <Icon className="w-3 h-3 text-white" />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm">{reactor.name}</p>
+                        <p className="text-xs text-[#757575]">{reactor.organization}</p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm">{reactor.name}</p>
-                      <p className="text-xs text-[#757575]">Food Safety Professional</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

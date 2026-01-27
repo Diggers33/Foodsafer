@@ -1,6 +1,7 @@
-import { ArrowLeft, Send, Paperclip, Image as ImageIcon, Phone, Video } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, Send, Paperclip, Image as ImageIcon, Phone, Video, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
+import { api } from '@/api';
 
 interface Message {
   id: string;
@@ -21,50 +22,68 @@ interface Conversation {
   messages: Message[];
 }
 
-const mockConversation: Conversation = {
-  id: '1',
-  participant: {
-    name: 'Sarah Johnson',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-    organization: 'FreshPro Organic Foods',
-    online: true,
-  },
-  messages: [
-    {
-      id: '1',
-      senderId: 'other',
-      text: 'Hi! Thanks for connecting. I saw your profile and would love to discuss some collaboration opportunities.',
-      timestamp: '2026-01-13T10:30:00',
-      isCurrentUser: false,
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function mapConversation(c: any, currentUserId: string): Conversation {
+  const participant = c.participant || c.otherUser || c.user || {};
+  const avatar = participant.avatar ? (participant.avatar.startsWith('http') ? participant.avatar : `${API_BASE}${participant.avatar}`) : '';
+  const participantName = `${participant.firstName || ''} ${participant.lastName || ''}`.trim() || participant.name || 'Unknown';
+
+  const msgs = (c.messages || []).map((m: any) => ({
+    id: m.id,
+    senderId: m.senderId || m.sender?.id || m.userId,
+    text: m.text || m.content || m.message || '',
+    timestamp: m.createdAt || m.timestamp || '',
+    isCurrentUser: (m.senderId || m.sender?.id || m.userId) === currentUserId || m.isCurrentUser || m.isMine,
+  }));
+
+  return {
+    id: c.id,
+    participant: {
+      name: participantName,
+      avatar,
+      organization: participant.organization || participant.company || '',
+      online: participant.online ?? participant.isOnline ?? false,
     },
-    {
-      id: '2',
-      senderId: 'me',
-      text: 'Hello Sarah! Nice to connect with you. I\'d be happy to discuss collaboration. What areas are you thinking about?',
-      timestamp: '2026-01-13T10:32:00',
-      isCurrentUser: true,
-    },
-    {
-      id: '3',
-      senderId: 'other',
-      text: 'We\'re looking to improve our HACCP implementation and I noticed you have extensive experience in that area. Would you be available for a consultation?',
-      timestamp: '2026-01-13T10:35:00',
-      isCurrentUser: false,
-    },
-    {
-      id: '4',
-      senderId: 'me',
-      text: 'Absolutely! I\'d be glad to help. We can schedule a call to discuss your specific needs and challenges.',
-      timestamp: '2026-01-13T10:37:00',
-      isCurrentUser: true,
-    },
-  ],
-};
+    messages: msgs,
+  };
+}
 
 export function MessageThread({ conversationId, onBack }: { conversationId: string; onBack: () => void }) {
   const [messageText, setMessageText] = useState('');
-  const [messages, setMessages] = useState(mockConversation.messages);
-  const conversation = mockConversation;
+  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchConversation();
+  }, [conversationId]);
+
+  const fetchConversation = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Get current user ID from localStorage token or profile
+      let currentUserId = '';
+      try {
+        const profileData = await api.get<any>('/queries/users/me');
+        currentUserId = profileData.id || '';
+      } catch {
+        // Continue without current user ID
+      }
+
+      const data = await api.get<any>(`/queries/conversations/${conversationId}`);
+      const mappedConv = mapConversation(data, currentUserId);
+      setConversation(mappedConv);
+      setMessages(mappedConv.messages);
+    } catch (err) {
+      console.error('Failed to load conversation:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load conversation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSend = () => {
     if (messageText.trim()) {
@@ -81,9 +100,44 @@ export function MessageThread({ conversationId, onBack }: { conversationId: stri
   };
 
   const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
+    if (!timestamp) return '';
+    let date: Date;
+    const ddmmyyyyMatch = timestamp.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+    if (ddmmyyyyMatch) {
+      const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+      date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+    } else {
+      date = new Date(timestamp);
+    }
+    if (isNaN(date.getTime())) return '';
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error || !conversation) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#212121]" />
+            </button>
+            <h4 className="ml-3">Conversation</h4>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error || 'Conversation not found'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] flex flex-col">

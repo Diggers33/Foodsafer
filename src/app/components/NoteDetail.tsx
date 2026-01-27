@@ -1,65 +1,147 @@
-import { useState } from 'react';
-import { ArrowLeft, Edit, MoreVertical, Lock, Globe, X, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Edit, MoreVertical, Lock, Globe, X, Save, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Switch } from './ui/switch';
+import { api } from '@/api';
 
 interface NoteDetailProps {
   noteId: string;
   onBack: () => void;
 }
 
-const mockNote = {
-  id: '1',
-  title: 'HACCP Critical Control Points Summary',
-  content: `Key CCPs identified during the last facility audit:
-
-1. Cooking Temperature Monitoring
-   - Critical Limit: Internal temperature must reach 165°F (74°C)
-   - Monitoring: Digital thermometers checked every 30 minutes
-   - Corrective Action: Extend cooking time if temperature not met
-
-2. Cold Storage Temperature Checks
-   - Critical Limit: Storage temperature must be maintained at 40°F (4°C) or below
-   - Monitoring: Automated temperature logging every 15 minutes
-   - Corrective Action: Immediate equipment check and product hold
-
-3. Metal Detector Verification
-   - Critical Limit: All metal contaminants >2mm must be detected
-   - Monitoring: Test with standard metal samples every 2 hours
-   - Corrective Action: Production stop, equipment recalibration
-
-4. Allergen Cleaning Verification
-   - Critical Limit: ATP testing <100 RLU on food contact surfaces
-   - Monitoring: Swab testing between allergen runs
-   - Corrective Action: Re-clean and retest until passing
-
-Action Items:
-- Schedule training session for new CCP procedures
-- Update documentation templates
-- Review with quality team by end of week`,
+interface Note {
+  id: string;
+  title: string;
+  content: string;
   author: {
-    name: 'Dr. Maria Rodriguez',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-  },
-  created: 'January 3, 2026',
-  lastEdited: '2 hours ago',
-  isPublic: true,
-};
+    name: string;
+    avatar: string;
+  };
+  created: string;
+  lastEdited: string;
+  isPublic: boolean;
+}
+
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatDate(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function formatTimeAgo(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function mapNote(n: any): Note {
+  const creator = n.creator || n.author || {};
+  const authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || 'Unknown';
+  const avatar = creator.avatar ? (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`) : '';
+
+  return {
+    id: n.id,
+    title: n.title || n.name || 'Untitled',
+    content: n.content || n.text || n.description || '',
+    author: { name: authorName, avatar },
+    created: formatDate(n.createdAt),
+    lastEdited: formatTimeAgo(n.updatedAt || n.createdAt),
+    isPublic: n.isPublic ?? true,
+  };
+}
 
 export function NoteDetail({ noteId, onBack }: NoteDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState(mockNote.title);
-  const [content, setContent] = useState(mockNote.content);
-  const [isPublic, setIsPublic] = useState(mockNote.isPublic);
+  const [note, setNote] = useState<Note | null>(null);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchNote();
+  }, [noteId]);
+
+  const fetchNote = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any>(`/queries/notes/${noteId}`);
+      const mappedNote = mapNote(data);
+      setNote(mappedNote);
+      setTitle(mappedNote.title);
+      setContent(mappedNote.content);
+      setIsPublic(mappedNote.isPublic);
+    } catch (err) {
+      console.error('Failed to load note:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load note');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSave = () => {
     setIsEditing(false);
     // Save logic here
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
+  if (error || !note) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="flex items-center px-4 h-14">
+            <button onClick={onBack}>
+              <ArrowLeft className="w-6 h-6 text-[#757575]" />
+            </button>
+            <h2 className="ml-3">Note</h2>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-red-600">{error || 'Note not found'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -147,28 +229,28 @@ export function NoteDetail({ noteId, onBack }: NoteDetailProps) {
         /* View Mode */
         <div className="bg-white px-4 py-4 mb-20">
           {/* Title */}
-          <h1 className="mb-4">{mockNote.title}</h1>
+          <h1 className="mb-4">{note.title}</h1>
 
           {/* Author and Meta */}
           <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
             <Avatar className="w-8 h-8">
-              <img src={mockNote.author.avatar} alt={mockNote.author.name} className="w-full h-full object-cover" />
+              <img src={note.author.avatar} alt={note.author.name} className="w-full h-full object-cover" />
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm">{mockNote.author.name}</h4>
+              <h4 className="text-sm">{note.author.name}</h4>
               <p className="text-xs text-[#757575]">
-                Created {mockNote.created} • Edited {mockNote.lastEdited}
+                Created {note.created} • Edited {note.lastEdited}
               </p>
             </div>
             <Badge
               variant="secondary"
               className={`${
-                mockNote.isPublic
+                note.isPublic
                   ? 'bg-[#E8F5E9] text-[#2E7D32]'
                   : 'bg-[#F5F5F5] text-[#757575]'
               } flex items-center gap-1`}
             >
-              {mockNote.isPublic ? (
+              {note.isPublic ? (
                 <>
                   <Globe className="w-3 h-3" />
                   Public
@@ -185,7 +267,7 @@ export function NoteDetail({ noteId, onBack }: NoteDetailProps) {
           {/* Content */}
           <div className="prose prose-sm max-w-none">
             <div className="text-[#212121] leading-relaxed whitespace-pre-line">
-              {mockNote.content}
+              {note.content}
             </div>
           </div>
         </div>
