@@ -3,19 +3,50 @@ import { useApp } from '../App';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react';
 import logoImage from '@/assets/ad1500f1c0a7d330374c8347ab5c29fbc9f7deb9.png';
+import { authService } from '@/api';
 
 export function LoginScreen() {
-  const { setIsAuthenticated } = useApp();
+  const { login } = useApp();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAuthenticated(true);
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await authService.login({ email, password });
+      login(response.user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Please enter your email address first.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await authService.forgotPassword(email);
+      setError(null);
+      alert('Password reset email sent. Please check your inbox.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send reset email.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -30,6 +61,13 @@ export function LoginScreen() {
 
       {/* Login Form */}
       <form onSubmit={handleLogin} className="w-full max-w-md space-y-4">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Email Input */}
         <div className="relative">
           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#757575]" />
@@ -39,6 +77,8 @@ export function LoginScreen() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="pl-10 h-12 bg-[#F5F5F5] border-none rounded-lg"
+            required
+            disabled={isLoading}
           />
         </div>
 
@@ -51,11 +91,14 @@ export function LoginScreen() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="pl-10 pr-10 h-12 bg-[#F5F5F5] border-none rounded-lg"
+            required
+            disabled={isLoading}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757575]"
+            disabled={isLoading}
           >
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
@@ -67,6 +110,7 @@ export function LoginScreen() {
             id="remember"
             checked={rememberMe}
             onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+            disabled={isLoading}
           />
           <label htmlFor="remember" className="text-sm text-[#212121] cursor-pointer">
             Remember me
@@ -74,13 +118,29 @@ export function LoginScreen() {
         </div>
 
         {/* Login Button */}
-        <Button type="submit" className="w-full h-12 bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg">
-          Login
+        <Button
+          type="submit"
+          className="w-full h-12 bg-[#2E7D32] hover:bg-[#1B5E20] rounded-lg"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Logging in...
+            </>
+          ) : (
+            'Login'
+          )}
         </Button>
 
         {/* Forgot Password Link */}
         <div className="text-center">
-          <button type="button" className="text-[#2E7D32] text-sm hover:underline">
+          <button
+            type="button"
+            className="text-[#2E7D32] text-sm hover:underline disabled:opacity-50"
+            onClick={handleForgotPassword}
+            disabled={isLoading}
+          >
             Forgot password?
           </button>
         </div>
@@ -99,7 +159,11 @@ export function LoginScreen() {
         <div className="grid grid-cols-3 gap-3">
           <button
             type="button"
-            className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            disabled={isLoading}
+            onClick={() => {
+              setError('Google login is not configured yet.');
+            }}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -110,7 +174,11 @@ export function LoginScreen() {
           </button>
           <button
             type="button"
-            className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            disabled={isLoading}
+            onClick={() => {
+              setError('Microsoft login is not configured yet.');
+            }}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#00A4EF">
               <path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/>
@@ -118,7 +186,11 @@ export function LoginScreen() {
           </button>
           <button
             type="button"
-            className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            disabled={isLoading}
+            onClick={() => {
+              setError('LinkedIn login is not configured yet.');
+            }}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0A66C2">
               <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
