@@ -234,8 +234,9 @@ export function LibraryList({ onBack }: { onBack: () => void }) {
                   {/* Actions */}
                   <div className="flex items-center gap-2">
                     <a
-                      href={doc.fileUrl}
-                      download
+                      href={doc.fileUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       onClick={(e) => {
                         if (!doc.fileUrl) {
                           e.preventDefault();
@@ -247,11 +248,13 @@ export function LibraryList({ onBack }: { onBack: () => void }) {
                       <Download className="w-4 h-4" />
                       <span>Download</span>
                     </a>
-                    <button
-                      onClick={() => {
-                        if (doc.fileUrl) {
-                          window.open(doc.fileUrl, '_blank');
-                        } else {
+                    <a
+                      href={doc.fileUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        if (!doc.fileUrl) {
+                          e.preventDefault();
                           alert('Preview not available');
                         }
                       }}
@@ -259,7 +262,7 @@ export function LibraryList({ onBack }: { onBack: () => void }) {
                     >
                       <Eye className="w-4 h-4" />
                       <span>Preview</span>
-                    </button>
+                    </a>
                   </div>
                 </div>
               </div>

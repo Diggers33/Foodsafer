@@ -181,11 +181,13 @@ export function ToolkitList({ onBack }: { onBack: () => void }) {
                       <span>{tool.downloads.toLocaleString()}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (tool.url) {
-                        window.open(tool.url, '_blank');
-                      } else {
+                  <a
+                    href={tool.url || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      if (!tool.url) {
+                        e.preventDefault();
                         alert('Tool URL not available');
                       }
                     }}
@@ -193,7 +195,7 @@ export function ToolkitList({ onBack }: { onBack: () => void }) {
                   >
                     <span>Open</span>
                     <ExternalLink className="w-4 h-4" />
-                  </button>
+                  </a>
                 </div>
               </div>
             </div>
