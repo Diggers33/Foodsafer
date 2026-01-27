@@ -38,7 +38,6 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  console.log('API Request:', url);
   const accessToken = getAccessToken();
 
   const headers: HeadersInit = {
@@ -77,8 +76,6 @@ async function request<T>(
 // Parse CQRS response format
 async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  console.log('API Response status:', response.status, 'URL:', response.url);
-  console.log('API Response body (first 200 chars):', text.substring(0, 200));
 
   if (!text) {
     if (!response.ok) {
