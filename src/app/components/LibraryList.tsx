@@ -35,18 +35,48 @@ function getFileType(filename: string): 'PDF' | 'DOC' | 'XLS' | 'PPT' {
   return 'PDF';
 }
 
-function mapDocument(item: any): Document {
-  const creator = item.creator || item.author || {};
-  const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
+function formatDate(dateString: string): string {
+  if (!dateString) return '';
 
-  // Debug: log the item to see what fields are available
-  console.log('Library item:', item);
+  let date: Date;
+  // Handle DD/MM/YYYY HH:mm:ss format from API
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}`);
+  } else {
+    date = new Date(dateString);
+  }
+
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function mapDocument(item: any): Document {
+  // Try multiple paths for creator/author
+  const creator = item.creator || item.author || item.user || item.uploadedBy || {};
+  let creatorName = '';
+
+  if (typeof creator === 'string') {
+    creatorName = creator;
+  } else {
+    creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() ||
+                  creator.name || creator.fullName || creator.displayName || '';
+  }
+
+  // Also check direct publisher fields
+  const publisher = creatorName || item.publisher || item.publisherName ||
+                    item.source || item.organization || '';
 
   // Get file URL - try multiple possible field names
   const rawUrl = item.url || item.fileUrl || item.file || item.path ||
                  item.downloadUrl || item.link || item.attachment ||
                  item.document || item.resourceUrl || item.src || '';
   const fileUrl = rawUrl ? (rawUrl.startsWith('http') ? rawUrl : `${API_BASE}${rawUrl}`) : '';
+
+  // Get date from multiple possible fields
+  const dateStr = item.createdAt || item.publishDate || item.publishedAt ||
+                  item.date || item.uploadedAt || item.datePublished || '';
 
   return {
     id: item.id,
@@ -56,8 +86,8 @@ function mapDocument(item: any): Document {
     type: getFileType(item.filename || item.name || item.url || ''),
     size: formatFileSize(item.size || item.fileSize || 0),
     downloads: item.downloads || item.downloadCount || 0,
-    publishDate: item.createdAt || item.publishDate || '',
-    publisher: creatorName || item.publisher || 'Unknown',
+    publishDate: formatDate(dateStr),
+    publisher: publisher || 'FoodSafer',
     fileUrl,
   };
 }
@@ -229,11 +259,13 @@ export function LibraryList({ onBack }: { onBack: () => void }) {
 
                   {/* Publisher and Date */}
                   <div className="flex items-center justify-between text-xs text-[#757575] mb-3">
-                    <span>Published by {doc.publisher}</span>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      <span>{new Date(doc.publishDate).toLocaleDateString()}</span>
-                    </div>
+                    {doc.publisher && <span>Published by {doc.publisher}</span>}
+                    {doc.publishDate && (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        <span>{doc.publishDate}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
