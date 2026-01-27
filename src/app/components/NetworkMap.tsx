@@ -71,10 +71,44 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch companies with higher limit to get more results
-      const response = await api.get<any>('/queries/companies?page=1&limit=500');
-      // Handle both array and paginated response formats
-      const companiesArray = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
+      // Try multiple endpoints to get all organizations
+      let companiesArray: any[] = [];
+
+      // Try search endpoint with wildcard first (often returns all)
+      try {
+        const searchResponse = await api.get<any>('/queries/companies/search?q=&page=1&limit=500');
+        const searchData = Array.isArray(searchResponse) ? searchResponse : (searchResponse.items || searchResponse.data || searchResponse.results || []);
+        if (searchData.length > 0) {
+          companiesArray = searchData;
+          console.log('Using search endpoint, found:', searchData.length);
+        }
+      } catch (e) {
+        console.log('Search endpoint failed, trying alternatives...');
+      }
+
+      // If search didn't work, try other endpoints
+      if (companiesArray.length <= 1) {
+        const endpoints = [
+          '/queries/companies/all',
+          '/queries/organizations',
+          '/queries/network/organizations',
+          '/queries/companies?page=1&limit=500',
+        ];
+
+        for (const endpoint of endpoints) {
+          try {
+            const response = await api.get<any>(endpoint);
+            const data = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
+            if (data.length > companiesArray.length) {
+              companiesArray = data;
+              console.log(`Using ${endpoint}, found:`, data.length);
+            }
+          } catch (e) {
+            // Endpoint doesn't exist, continue to next
+          }
+        }
+      }
+
       const mapped = companiesArray.map(mapCompany);
       const withCoords = mapped.filter(c => isFinite(c.lat) && isFinite(c.lng));
       console.log(`Companies: ${mapped.length} total, ${withCoords.length} with valid coordinates`);
