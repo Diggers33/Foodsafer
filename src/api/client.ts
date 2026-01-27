@@ -6,6 +6,24 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 const ACCESS_TOKEN_KEY = 'foodsafer_access_token';
 const REFRESH_TOKEN_KEY = 'foodsafer_refresh_token';
 
+// Auth state change event
+type AuthStateListener = (isAuthenticated: boolean) => void;
+const authStateListeners: AuthStateListener[] = [];
+
+export function onAuthStateChange(listener: AuthStateListener): () => void {
+  authStateListeners.push(listener);
+  return () => {
+    const index = authStateListeners.indexOf(listener);
+    if (index > -1) {
+      authStateListeners.splice(index, 1);
+    }
+  };
+}
+
+function notifyAuthStateChange(isAuthenticated: boolean): void {
+  authStateListeners.forEach(listener => listener(isAuthenticated));
+}
+
 // Token management
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -18,11 +36,13 @@ export function getRefreshToken(): string | null {
 export function setTokens(accessToken: string, refreshToken: string): void {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  notifyAuthStateChange(true);
 }
 
 export function clearTokens(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  notifyAuthStateChange(false);
 }
 
 // CQRS Response format from FoodSafer API

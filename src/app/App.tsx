@@ -6,7 +6,7 @@ import { ResourcesHub } from './components/ResourcesHub';
 import { NetworkMap } from './components/NetworkMap';
 import { UserProfile } from './components/UserProfile';
 import { BottomNav } from './components/BottomNav';
-import { User, authService, getAccessToken, clearTokens } from '@/api';
+import { User, authService, getAccessToken, clearTokens, onAuthStateChange } from '@/api';
 import { Loader2 } from 'lucide-react';
 
 // App context for managing auth state
@@ -53,6 +53,19 @@ export default function App() {
     };
 
     checkAuth();
+  }, []);
+
+  // Listen for auth state changes (e.g., when tokens are cleared due to session expiry)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange((authenticated) => {
+      if (!authenticated) {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setActiveTab('home');
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   const login = useCallback((user: User) => {
