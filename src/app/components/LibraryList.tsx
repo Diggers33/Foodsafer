@@ -14,7 +14,10 @@ interface Document {
   downloads: number;
   publishDate: string;
   publisher: string;
+  fileUrl: string;
 }
+
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function formatFileSize(bytes: number): string {
   if (!bytes) return '';
@@ -36,6 +39,10 @@ function mapDocument(item: any): Document {
   const creator = item.creator || item.author || {};
   const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
 
+  // Get file URL - handle relative paths
+  const rawUrl = item.url || item.fileUrl || item.file || item.path || '';
+  const fileUrl = rawUrl ? (rawUrl.startsWith('http') ? rawUrl : `${API_BASE}${rawUrl}`) : '';
+
   return {
     id: item.id,
     title: item.title || item.name || 'Untitled',
@@ -46,6 +53,7 @@ function mapDocument(item: any): Document {
     downloads: item.downloads || item.downloadCount || 0,
     publishDate: item.createdAt || item.publishDate || '',
     publisher: creatorName || item.publisher || 'Unknown',
+    fileUrl,
   };
 }
 
@@ -225,11 +233,30 @@ export function LibraryList({ onBack }: { onBack: () => void }) {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2">
-                    <button className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-[#9C27B0] text-white rounded-lg hover:bg-[#7B1FA2] text-sm">
+                    <a
+                      href={doc.fileUrl}
+                      download
+                      onClick={(e) => {
+                        if (!doc.fileUrl) {
+                          e.preventDefault();
+                          alert('File not available for download');
+                        }
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-[#9C27B0] text-white rounded-lg hover:bg-[#7B1FA2] text-sm"
+                    >
                       <Download className="w-4 h-4" />
                       <span>Download</span>
-                    </button>
-                    <button className="flex-1 flex items-center justify-center gap-1 px-3 py-2 border border-[#9C27B0] text-[#9C27B0] rounded-lg hover:bg-[#F3E5F5] text-sm">
+                    </a>
+                    <button
+                      onClick={() => {
+                        if (doc.fileUrl) {
+                          window.open(doc.fileUrl, '_blank');
+                        } else {
+                          alert('Preview not available');
+                        }
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-2 border border-[#9C27B0] text-[#9C27B0] rounded-lg hover:bg-[#F3E5F5] text-sm"
+                    >
                       <Eye className="w-4 h-4" />
                       <span>Preview</span>
                     </button>

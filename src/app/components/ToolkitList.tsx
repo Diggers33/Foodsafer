@@ -181,7 +181,16 @@ export function ToolkitList({ onBack }: { onBack: () => void }) {
                       <span>{tool.downloads.toLocaleString()}</span>
                     </div>
                   </div>
-                  <button className="flex items-center gap-1 text-[#2196F3] text-sm">
+                  <button
+                    onClick={() => {
+                      if (tool.url) {
+                        window.open(tool.url, '_blank');
+                      } else {
+                        alert('Tool URL not available');
+                      }
+                    }}
+                    className="flex items-center gap-1 text-[#2196F3] text-sm"
+                  >
                     <span>Open</span>
                     <ExternalLink className="w-4 h-4" />
                   </button>
