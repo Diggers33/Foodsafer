@@ -92,14 +92,9 @@ function mapCourse(t: any): CourseData {
   const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
 
   // Get video URL from various possible fields
-  // If fileId exists, construct the file URL
-  let videoUrl = t.videoUrl || t.video || t.youtubeUrl || t.youtubeLink ||
-                 t.videoLink || t.mediaUrl || t.url || '';
-
-  // If no direct URL but has fileId, construct the file URL
-  if (!videoUrl && t.fileId) {
-    videoUrl = `${API_BASE}/files/${t.fileId}`;
-  }
+  // The API returns the URL in file.rawLink for YouTube videos
+  let videoUrl = t.file?.rawLink || t.videoUrl || t.video || t.youtubeUrl ||
+                 t.youtubeLink || t.videoLink || t.mediaUrl || t.url || '';
 
   const modules = (t.modules || t.sections || []).map((m: any, mIdx: number) => ({
     id: m.id || String(mIdx + 1),
