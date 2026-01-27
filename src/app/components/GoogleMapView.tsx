@@ -1,6 +1,6 @@
 import { APIProvider, Map, AdvancedMarker, InfoWindow } from '@vis.gl/react-google-maps';
-import { useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { MapPin, Loader2 } from 'lucide-react';
 
 // Google Maps API key
 const GOOGLE_MAPS_API_KEY = 'AIzaSyAODh4TLy6v__-VM729_O_ZxAcmCq6u-ek';
@@ -20,23 +20,69 @@ interface GoogleMapViewProps {
 
 export function GoogleMapView({ locations, onMarkerClick }: GoogleMapViewProps) {
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
 
-  // Center map on Portland, OR by default
-  const defaultCenter = { lat: 45.5155, lng: -122.6789 };
+  // Default fallback location (London, UK)
+  const fallbackCenter = { lat: 51.5074, lng: -0.1278 };
+
+  useEffect(() => {
+    // Get user's current location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          setIsLoadingLocation(false);
+        },
+        (error) => {
+          console.log('Geolocation error:', error.message);
+          setIsLoadingLocation(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    } else {
+      setIsLoadingLocation(false);
+    }
+  }, []);
+
+  // Use user location if available, otherwise fall back to default
+  const mapCenter = userLocation || fallbackCenter;
 
   const selectedMarker = locations.find(loc => loc.id === selectedLocation);
+
+  if (isLoadingLocation) {
+    return (
+      <div className="h-[50vh] w-full flex items-center justify-center bg-gray-100">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
 
   return (
     <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
       <div className="h-[50vh] w-full">
         <Map
           mapId="foodsafer-network-map"
-          defaultCenter={defaultCenter}
-          defaultZoom={11}
+          defaultCenter={mapCenter}
+          defaultZoom={12}
           gestureHandling="greedy"
           disableDefaultUI={false}
           style={{ width: '100%', height: '100%' }}
         >
+          {/* User's current location marker */}
+          {userLocation && (
+            <AdvancedMarker position={userLocation}>
+              <div className="relative flex items-center justify-center">
+                <div className="w-4 h-4 bg-[#4285F4] rounded-full border-2 border-white shadow-lg" />
+                <div className="absolute w-8 h-8 bg-[#4285F4]/20 rounded-full animate-pulse" />
+              </div>
+            </AdvancedMarker>
+          )}
+
+          {/* Location markers */}
           {locations.map((location) => (
             <AdvancedMarker
               key={location.id}
