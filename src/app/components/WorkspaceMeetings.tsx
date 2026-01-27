@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Calendar as CalendarIcon, Plus, List, Video, MapPin, Users as UsersIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar as CalendarIcon, Plus, List, Video, MapPin, Users as UsersIcon, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { MeetingDetail } from './MeetingDetail';
+import { api } from '@/api';
 
 interface WorkspaceMeetingsProps {
   workspaceId: string;
@@ -22,76 +23,109 @@ interface Meeting {
   rsvpStatus: 'Attending' | 'Pending' | 'Declined';
 }
 
-const mockMeetings: Meeting[] = [
-  {
-    id: '1',
-    title: 'HACCP Protocol Review Meeting',
-    date: 'Jan 8, 2026',
-    startTime: '10:00 AM',
-    endTime: '11:30 AM',
-    isVirtual: true,
-    participants: [
-      { avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop', name: 'Sarah' },
-      { avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop', name: 'Maria' },
-      { avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop', name: 'James' },
-    ],
-    totalParticipants: 12,
-    rsvpStatus: 'Attending',
-  },
-  {
-    id: '2',
-    title: 'Q1 Compliance Audit Preparation',
-    date: 'Jan 10, 2026',
-    startTime: '2:00 PM',
-    endTime: '3:00 PM',
-    isVirtual: false,
-    location: 'Conference Room A',
-    participants: [
-      { avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop', name: 'Emily' },
-      { avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop', name: 'Michael' },
-    ],
-    totalParticipants: 8,
-    rsvpStatus: 'Pending',
-  },
-  {
-    id: '3',
-    title: 'Monthly Team Sync',
-    date: 'Jan 15, 2026',
-    startTime: '9:00 AM',
-    endTime: '10:00 AM',
-    isVirtual: true,
-    participants: [
-      { avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop', name: 'Sarah' },
-      { avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop', name: 'Maria' },
-    ],
-    totalParticipants: 24,
-    rsvpStatus: 'Attending',
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatMeetingDate(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatTime(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function mapMeeting(m: any): Meeting {
+  const participants = (m.participants || m.attendees || []).slice(0, 3).map((p: any) => {
+    const user = p.user || p;
+    return {
+      avatar: user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '',
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Participant',
+    };
+  });
+
+  return {
+    id: m.id,
+    title: m.title || m.name || 'Untitled Meeting',
+    date: formatMeetingDate(m.startDate || m.date || m.createdAt),
+    startTime: formatTime(m.startDate || m.startTime) || '',
+    endTime: formatTime(m.endDate || m.endTime) || '',
+    isVirtual: m.isVirtual ?? m.isOnline ?? true,
+    location: m.location || m.address || '',
+    participants,
+    totalParticipants: m.participantsCount || m.numParticipants || participants.length,
+    rsvpStatus: m.rsvpStatus || 'Pending',
+  };
+}
 
 export function WorkspaceMeetings({ workspaceId }: WorkspaceMeetingsProps) {
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [selectedMeeting, setSelectedMeeting] = useState<string | null>(null);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMeetings();
+  }, [workspaceId]);
+
+  const fetchMeetings = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Get meetings for a wide date range (1 year back to 1 year forward)
+      const now = Date.now();
+      const yearMs = 365 * 24 * 60 * 60 * 1000;
+      const startDate = now - yearMs;
+      const endDate = now + yearMs;
+      const data = await api.get<any[]>(`/queries/workspaces/${workspaceId}/meetings/${startDate}/${endDate}`);
+      const meetingsArray = Array.isArray(data) ? data : [];
+      setMeetings(meetingsArray.map(mapMeeting));
+    } catch (err) {
+      console.error('Failed to load meetings:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load meetings');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedMeeting) {
     return <MeetingDetail meetingId={selectedMeeting} onBack={() => setSelectedMeeting(null)} />;
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
+    <div className="bg-[#F5F5F5]">
       {/* Filter Bar */}
       <div className="bg-white px-4 py-3 border-b border-gray-200">
         <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'calendar')}>
           <TabsList className="w-full grid grid-cols-2 bg-[#F5F5F5]">
-            <TabsTrigger 
-              value="list" 
+            <TabsTrigger
+              value="list"
               className="data-[state=active]:bg-white data-[state=active]:text-[#2E7D32] flex items-center gap-2"
             >
               <List className="w-4 h-4" />
               List
             </TabsTrigger>
-            <TabsTrigger 
-              value="calendar" 
+            <TabsTrigger
+              value="calendar"
               className="data-[state=active]:bg-white data-[state=active]:text-[#2E7D32] flex items-center gap-2"
             >
               <CalendarIcon className="w-4 h-4" />
@@ -104,76 +138,41 @@ export function WorkspaceMeetings({ workspaceId }: WorkspaceMeetingsProps) {
       {/* List View */}
       {view === 'list' && (
         <div className="px-4 py-4">
-          {/* Upcoming Section */}
-          <div className="mb-6">
-            <h3 className="mb-3">Upcoming</h3>
-            <div className="space-y-3">
-              {mockMeetings.map((meeting) => (
-                <MeetingCard
-                  key={meeting.id}
-                  meeting={meeting}
-                  onClick={() => setSelectedMeeting(meeting.id)}
-                />
-              ))}
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
             </div>
-          </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          ) : meetings.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-[#757575]">No meetings scheduled</p>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <h3 className="mb-3">Meetings</h3>
+              <div className="space-y-3">
+                {meetings.map((meeting) => (
+                  <MeetingCard
+                    key={meeting.id}
+                    meeting={meeting}
+                    onClick={() => setSelectedMeeting(meeting.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Calendar View */}
       {view === 'calendar' && (
         <div className="px-4 py-4">
-          {/* Month Selector */}
-          <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3>January 2026</h3>
-              <button className="text-[#2E7D32]">Today</button>
-            </div>
-            
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-                <div key={day} className="text-center text-xs text-[#757575] py-2">
-                  {day}
-                </div>
-              ))}
-              {Array.from({ length: 35 }, (_, i) => {
-                const day = i - 2;
-                const hasMeeting = [8, 10, 15].includes(day);
-                const isToday = day === 5;
-                return (
-                  <button
-                    key={i}
-                    className={`aspect-square flex flex-col items-center justify-center rounded-lg text-sm relative ${
-                      day < 1 || day > 31
-                        ? 'text-[#BDBDBD]'
-                        : isToday
-                        ? 'bg-[#2E7D32] text-white'
-                        : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    {day > 0 && day <= 31 && day}
-                    {hasMeeting && !isToday && (
-                      <span className="absolute bottom-1 w-1 h-1 bg-[#2E7D32] rounded-full"></span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Selected Day Meetings */}
-          <div>
-            <h3 className="mb-3">January 5, 2026</h3>
-            <div className="space-y-3">
-              {mockMeetings.slice(0, 1).map((meeting) => (
-                <MeetingCard
-                  key={meeting.id}
-                  meeting={meeting}
-                  onClick={() => setSelectedMeeting(meeting.id)}
-                />
-              ))}
-            </div>
+          <div className="text-center py-8">
+            <p className="text-[#757575]">Calendar view coming soon</p>
+            <button onClick={() => setView('list')} className="text-[#2E7D32] mt-2">View as list</button>
           </div>
         </div>
       )}

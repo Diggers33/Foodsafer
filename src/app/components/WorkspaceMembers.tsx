@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Search, UserPlus, Crown, MessageCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, UserPlus, Crown, MessageCircle, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
+import { workspacesService } from '@/api';
 
 interface WorkspaceMembersProps {
   workspaceId: string;
@@ -19,129 +20,78 @@ interface Member {
   status?: 'Active' | 'Pending';
 }
 
-const mockMembers: Member[] = [
-  {
-    id: '1',
-    name: 'Dr. Maria Rodriguez',
-    organization: 'Global Food Standards',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-    role: 'Admin',
-    isOnline: true,
-    status: 'Active',
-  },
-  {
-    id: '2',
-    name: 'Sarah Johnson',
-    organization: 'FoodSafe Global',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-    role: 'Admin',
-    isOnline: true,
-    status: 'Active',
-  },
-  {
-    id: '3',
-    name: 'James Chen',
-    organization: 'SafeFood Consulting',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: true,
-    status: 'Active',
-  },
-  {
-    id: '4',
-    name: 'Emily Davis',
-    organization: 'Quality First Inc',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: false,
-    status: 'Active',
-  },
-  {
-    id: '5',
-    name: 'Michael Brown',
-    organization: 'Food Safety Solutions',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: false,
-    status: 'Active',
-  },
-  {
-    id: '6',
-    name: 'Lisa Anderson',
-    organization: 'NutriSafe Labs',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: true,
-    status: 'Active',
-  },
-  {
-    id: '7',
-    name: 'David Wilson',
-    organization: 'TechFood Systems',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: false,
-    status: 'Active',
-  },
-  {
-    id: '8',
-    name: 'Jennifer Lee',
-    organization: 'Global Quality Assurance',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: true,
-    status: 'Active',
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
 
-const mockPendingMembers: Member[] = [
-  {
-    id: 'p1',
-    name: 'Robert Martinez',
-    organization: 'FreshPro Foods',
-    avatar: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: false,
-    status: 'Pending',
-  },
-  {
-    id: 'p2',
-    name: 'Amanda Clark',
-    organization: 'SafetyFirst Consulting',
-    avatar: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400&h=400&fit=crop',
-    role: 'Member',
-    isOnline: false,
-    status: 'Pending',
-  },
-];
+function mapMember(p: any): Member {
+  const user = p.user || p;
+  const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown';
+  const avatar = user.avatar ?
+    (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '';
+  const company = user.userCompanies?.[0]?.company?.name || user.organization || '';
+
+  return {
+    id: user.id || p.userId,
+    name,
+    organization: company,
+    avatar,
+    role: p.isAdmin ? 'Admin' : 'Member',
+    isOnline: user.isOnline || false,
+    status: p.status === 22 ? 'Active' : 'Pending',
+  };
+}
 
 export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'admins' | 'pending'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [workspaceId]);
+
+  const fetchMembers = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await workspacesService.getById(workspaceId);
+      const participants = data.participants || [];
+      setMembers(participants.map(mapMember));
+    } catch (err) {
+      console.error('Failed to load members:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load members');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const activeMembers = members.filter(m => m.status === 'Active');
+  const pendingMembers = members.filter(m => m.status === 'Pending');
 
   const filteredMembers = () => {
-    let members = mockMembers;
-    
+    let filtered = activeMembers;
+
     if (activeTab === 'admins') {
-      members = members.filter(m => m.role === 'Admin');
+      filtered = filtered.filter(m => m.role === 'Admin');
     }
-    
+
     if (searchQuery) {
-      members = members.filter(m => 
+      filtered = filtered.filter(m =>
         m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.organization.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    
-    return members;
+
+    return filtered;
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
+    <div className="bg-[#F5F5F5]">
       {/* Header Bar */}
       <div className="bg-white px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
-          <h3>Members ({mockMembers.length})</h3>
+          <h3>Members ({activeMembers.length})</h3>
           <div className="flex items-center gap-3">
             <button>
               <Search className="w-5 h-5 text-[#757575]" />
@@ -155,54 +105,73 @@ export function WorkspaceMembers({ workspaceId }: WorkspaceMembersProps) {
         {/* Filter Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
           <TabsList className="w-full grid grid-cols-3 bg-[#F5F5F5]">
-            <TabsTrigger 
-              value="all" 
+            <TabsTrigger
+              value="all"
               className="data-[state=active]:bg-white data-[state=active]:text-[#2E7D32]"
             >
               All
             </TabsTrigger>
-            <TabsTrigger 
-              value="admins" 
+            <TabsTrigger
+              value="admins"
               className="data-[state=active]:bg-white data-[state=active]:text-[#2E7D32]"
             >
               Admins
             </TabsTrigger>
-            <TabsTrigger 
-              value="pending" 
+            <TabsTrigger
+              value="pending"
               className="data-[state=active]:bg-white data-[state=active]:text-[#2E7D32]"
             >
-              Pending {mockPendingMembers.length > 0 && `(${mockPendingMembers.length})`}
+              Pending {pendingMembers.length > 0 && `(${pendingMembers.length})`}
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      {/* Members List */}
-      {activeTab !== 'pending' && (
-        <div className="px-4 py-4 space-y-2">
-          {filteredMembers().map((member) => (
-            <MemberCard key={member.id} member={member} />
-          ))}
+      {/* Loading/Error states */}
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
         </div>
-      )}
-
-      {/* Pending Members */}
-      {activeTab === 'pending' && (
-        <div className="px-4 py-4">
-          {mockPendingMembers.length > 0 ? (
-            <div className="space-y-3">
-              <h4 className="text-[#757575] text-sm mb-3">Join Requests</h4>
-              {mockPendingMembers.map((member) => (
-                <PendingMemberCard key={member.id} member={member} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <UserPlus className="w-12 h-12 text-[#BDBDBD] mx-auto mb-3" />
-              <p className="text-[#757575]">No pending requests</p>
+      ) : error ? (
+        <div className="text-center py-8">
+          <p className="text-red-600 text-sm">{error}</p>
+        </div>
+      ) : (
+        <>
+          {/* Members List */}
+          {activeTab !== 'pending' && (
+            <div className="px-4 py-4 space-y-2">
+              {filteredMembers().length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-[#757575]">No members found</p>
+                </div>
+              ) : (
+                filteredMembers().map((member) => (
+                  <MemberCard key={member.id} member={member} />
+                ))
+              )}
             </div>
           )}
-        </div>
+
+          {/* Pending Members */}
+          {activeTab === 'pending' && (
+            <div className="px-4 py-4">
+              {pendingMembers.length > 0 ? (
+                <div className="space-y-3">
+                  <h4 className="text-[#757575] text-sm mb-3">Join Requests</h4>
+                  {pendingMembers.map((member) => (
+                    <PendingMemberCard key={member.id} member={member} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <UserPlus className="w-12 h-12 text-[#BDBDBD] mx-auto mb-3" />
+                  <p className="text-[#757575]">No pending requests</p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Search, Filter, Plus, MessageSquare, Star } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Plus, MessageSquare, Star, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { DiscussionDetail } from './DiscussionDetail';
+import { api } from '@/api';
 
 interface WorkspaceDiscussionsProps {
   workspaceId: string;
@@ -23,79 +24,90 @@ interface Discussion {
   hasUnread: boolean;
 }
 
-const mockDiscussions: Discussion[] = [
-  {
-    id: '1',
-    title: 'Updated HACCP Protocol for Allergen Management',
-    author: {
-      name: 'Dr. Maria Rodriguez',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-    },
-    preview: 'I\'ve drafted an updated protocol based on the new FDA guidelines...',
-    tags: ['HACCP', 'Allergens', 'Protocol'],
-    replyCount: 15,
-    lastActivity: '2h ago',
-    isFollowing: true,
-    hasUnread: true,
-  },
-  {
-    id: '2',
-    title: 'Q3 Audit Preparation Checklist',
-    author: {
-      name: 'James Chen',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-    },
-    preview: 'Here\'s a comprehensive checklist for our upcoming Q3 audit...',
-    tags: ['Audit', 'Compliance'],
-    replyCount: 8,
-    lastActivity: '5h ago',
-    isFollowing: false,
-    hasUnread: true,
-  },
-  {
-    id: '3',
-    title: 'Best Practices for Temperature Monitoring',
-    author: {
-      name: 'Sarah Johnson',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-    },
-    preview: 'Let\'s compile our best practices for temperature monitoring across facilities...',
-    tags: ['Monitoring', 'Best Practices'],
-    replyCount: 23,
-    lastActivity: '1d ago',
-    isFollowing: true,
-    hasUnread: false,
-  },
-  {
-    id: '4',
-    title: 'Training Materials for New Team Members',
-    author: {
-      name: 'Emily Davis',
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop',
-    },
-    preview: 'I\'ve created some training materials for new hires. Looking for feedback...',
-    tags: ['Training', 'Onboarding'],
-    replyCount: 12,
-    lastActivity: '2d ago',
-    isFollowing: false,
-    hasUnread: false,
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatTimeAgo(dateString: string): string {
+  if (!dateString) return '';
+
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+
+  if (isNaN(date.getTime())) return dateString;
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function mapDiscussion(d: any): Discussion {
+  const creator = d.creator || d.author || {};
+  const authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || 'Unknown';
+  const avatar = creator.avatar ?
+    (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`) : '';
+
+  return {
+    id: d.id,
+    title: d.title || d.name || 'Untitled',
+    author: { name: authorName, avatar },
+    preview: d.text || d.content || d.description || '',
+    tags: d.tags || [],
+    replyCount: d.commentsCount || d.replyCount || d.numComments || 0,
+    lastActivity: formatTimeAgo(d.updatedAt || d.createdAt),
+    isFollowing: d.isFollowing || false,
+    hasUnread: d.hasUnread || false,
+  };
+}
 
 export function WorkspaceDiscussions({ workspaceId }: WorkspaceDiscussionsProps) {
   const [selectedDiscussion, setSelectedDiscussion] = useState<string | null>(null);
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchDiscussions();
+  }, [workspaceId]);
+
+  const fetchDiscussions = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>(`/queries/workspaces/${workspaceId}/discussions?sort=1`);
+      const discussionsArray = Array.isArray(data) ? data : [];
+      setDiscussions(discussionsArray.map(mapDiscussion));
+    } catch (err) {
+      console.error('Failed to load discussions:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load discussions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedDiscussion) {
     return (
-      <DiscussionDetail 
-        discussionId={selectedDiscussion} 
-        onBack={() => setSelectedDiscussion(null)} 
+      <DiscussionDetail
+        discussionId={selectedDiscussion}
+        onBack={() => setSelectedDiscussion(null)}
       />
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
+    <div className="bg-[#F5F5F5]">
       {/* Filter Bar */}
       <div className="bg-white px-4 py-3 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -106,24 +118,33 @@ export function WorkspaceDiscussions({ workspaceId }: WorkspaceDiscussionsProps)
             <Filter className="w-5 h-5 text-[#757575]" />
           </button>
         </div>
-        <span className="text-sm text-[#757575]">{mockDiscussions.length} discussions</span>
+        <span className="text-sm text-[#757575]">{discussions.length} discussions</span>
       </div>
 
       {/* Discussions List */}
       <div className="px-4 py-4 space-y-3">
-        {mockDiscussions.map((discussion) => (
-          <DiscussionCard
-            key={discussion.id}
-            discussion={discussion}
-            onClick={() => setSelectedDiscussion(discussion.id)}
-          />
-        ))}
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        ) : discussions.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-[#757575]">No discussions yet</p>
+          </div>
+        ) : (
+          discussions.map((discussion) => (
+            <DiscussionCard
+              key={discussion.id}
+              discussion={discussion}
+              onClick={() => setSelectedDiscussion(discussion.id)}
+            />
+          ))
+        )}
       </div>
-
-      {/* Floating Action Button */}
-      <button className="fixed bottom-24 right-6 w-14 h-14 bg-[#2E7D32] hover:bg-[#1B5E20] rounded-full shadow-lg flex items-center justify-center z-40">
-        <Plus className="w-6 h-6 text-white" />
-      </button>
     </div>
   );
 }

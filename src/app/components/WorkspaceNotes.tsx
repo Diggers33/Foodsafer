@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Search, SortAsc, Plus, Lock, Globe } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, SortAsc, Plus, Lock, Globe, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { NoteDetail } from './NoteDetail';
+import { api } from '@/api';
 
 interface WorkspaceNotesProps {
   workspaceId: string;
@@ -19,62 +20,78 @@ interface Note {
   isPublic: boolean;
 }
 
-const mockNotes: Note[] = [
-  {
-    id: '1',
-    title: 'HACCP Critical Control Points Summary',
-    preview: 'Key CCPs identified during the last facility audit: 1. Cooking temperature monitoring, 2. Cold storage temperature checks, 3. Metal detector verification...',
-    author: {
-      name: 'Dr. Maria Rodriguez',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-    },
-    lastEdited: '2h ago',
-    isPublic: true,
-  },
-  {
-    id: '2',
-    title: 'Meeting Notes - Jan 3 Protocol Review',
-    preview: 'Attendees: Maria, James, Sarah, Emily. Agenda items covered: New FDA guidelines review, Implementation timeline discussion, Budget allocation...',
-    author: {
-      name: 'Sarah Johnson',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-    },
-    lastEdited: '1d ago',
-    isPublic: false,
-  },
-  {
-    id: '3',
-    title: 'Supplier Audit Checklist',
-    preview: 'Documentation requirements: 1. Food safety certifications, 2. HACCP plans, 3. Allergen management procedures, 4. Traceability systems...',
-    author: {
-      name: 'James Chen',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-    },
-    lastEdited: '3d ago',
-    isPublic: true,
-  },
-  {
-    id: '4',
-    title: 'Training Session Ideas',
-    preview: 'Topics for next quarter: Personal hygiene refresher, Cross-contamination prevention, Proper cleaning procedures, Emergency response protocols...',
-    author: {
-      name: 'Emily Davis',
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop',
-    },
-    lastEdited: '1w ago',
-    isPublic: false,
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatTimeAgo(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function mapNote(n: any): Note {
+  const creator = n.creator || n.author || {};
+  const authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || 'Unknown';
+  const avatar = creator.avatar ?
+    (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`) : '';
+
+  return {
+    id: n.id,
+    title: n.title || n.name || 'Untitled',
+    preview: n.content || n.text || n.description || '',
+    author: { name: authorName, avatar },
+    lastEdited: formatTimeAgo(n.updatedAt || n.createdAt),
+    isPublic: n.isPublic ?? true,
+  };
+}
 
 export function WorkspaceNotes({ workspaceId }: WorkspaceNotesProps) {
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [workspaceId]);
+
+  const fetchNotes = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>(`/workspaces/${workspaceId}/notes`);
+      const notesArray = Array.isArray(data) ? data : [];
+      setNotes(notesArray.map(mapNote));
+    } catch (err) {
+      console.error('Failed to load notes:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load notes');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedNote) {
     return <NoteDetail noteId={selectedNote} onBack={() => setSelectedNote(null)} />;
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
+    <div className="bg-[#F5F5F5]">
       {/* Filter Bar */}
       <div className="bg-white px-4 py-3 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -85,24 +102,33 @@ export function WorkspaceNotes({ workspaceId }: WorkspaceNotesProps) {
             <SortAsc className="w-5 h-5 text-[#757575]" />
           </button>
         </div>
-        <span className="text-sm text-[#757575]">{mockNotes.length} notes</span>
+        <span className="text-sm text-[#757575]">{notes.length} notes</span>
       </div>
 
       {/* Notes List */}
       <div className="px-4 py-4 space-y-3">
-        {mockNotes.map((note) => (
-          <NoteCard
-            key={note.id}
-            note={note}
-            onClick={() => setSelectedNote(note.id)}
-          />
-        ))}
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        ) : notes.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-[#757575]">No notes yet</p>
+          </div>
+        ) : (
+          notes.map((note) => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              onClick={() => setSelectedNote(note.id)}
+            />
+          ))
+        )}
       </div>
-
-      {/* Floating Action Button */}
-      <button className="fixed bottom-24 right-6 w-14 h-14 bg-[#2E7D32] hover:bg-[#1B5E20] rounded-full shadow-lg flex items-center justify-center z-40">
-        <Plus className="w-6 h-6 text-white" />
-      </button>
     </div>
   );
 }
