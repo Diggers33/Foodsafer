@@ -97,6 +97,7 @@ export function HomeFeed({ onProfileClick }: { onProfileClick: () => void }) {
       const response = await postsService.getAll();
       // API returns array directly, not { data: [...] }
       const postsArray = Array.isArray(response) ? response : response.data || [];
+      console.log('Posts from API:', JSON.stringify(postsArray[0], null, 2));
       const displayPosts = postsArray.map((post) => toDisplayPost(post, currentUser?.id));
       setPosts(displayPosts);
     } catch (err) {
