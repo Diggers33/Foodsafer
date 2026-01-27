@@ -56,6 +56,7 @@ export function WorkspaceDetail({ workspaceId, onBack }: WorkspaceDetailProps) {
     setError(null);
     try {
       const data = await workspacesService.getById(workspaceId);
+      console.log('Workspace API response:', JSON.stringify(data, null, 2));
       // Map API response to our display format
       const thumbnail = data.thumbnail ?
         (data.thumbnail.startsWith('http') ? data.thumbnail : `${API_BASE}${data.thumbnail}`)
@@ -85,6 +86,7 @@ export function WorkspaceDetail({ workspaceId, onBack }: WorkspaceDetailProps) {
         },
       });
     } catch (err) {
+      console.error('Failed to load workspace:', err);
       setError(err instanceof Error ? err.message : 'Failed to load workspace');
     } finally {
       setIsLoading(false);
