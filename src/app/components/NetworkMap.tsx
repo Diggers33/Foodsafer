@@ -21,9 +21,20 @@ interface NetworkItem {
 
 const API_BASE = 'https://test.foodsafer.com/api';
 
+function parseCoordinate(value: any): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
+  if (isNaN(num) || !isFinite(num)) return null;
+  return num;
+}
+
 function mapCompany(c: any): NetworkItem {
   const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
   const address = c.address || c.city || c.country || '';
+
+  // Parse coordinates safely - allow 0 as valid value
+  const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
+  const lng = parseCoordinate(c.longitude) ?? parseCoordinate(c.lng);
 
   return {
     id: c.id,
@@ -32,8 +43,8 @@ function mapCompany(c: any): NetworkItem {
     location: address,
     distance: '',
     thumbnail: logo,
-    lat: c.latitude || c.lat || 0,
-    lng: c.longitude || c.lng || 0,
+    lat: lat ?? NaN,
+    lng: lng ?? NaN,
   };
 }
 
@@ -92,14 +103,16 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
     );
   }
 
-  // Convert companies to Google Maps location format
-  const mapLocations = companies.filter(c => c.lat && c.lng).map(item => ({
-    id: item.id,
-    name: item.name,
-    category: item.category,
-    position: { lat: item.lat, lng: item.lng },
-    thumbnail: item.thumbnail,
-  }));
+  // Convert companies to Google Maps location format - only include items with valid coordinates
+  const mapLocations = companies
+    .filter(c => isFinite(c.lat) && isFinite(c.lng))
+    .map(item => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      position: { lat: item.lat, lng: item.lng },
+      thumbnail: item.thumbnail,
+    }));
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
