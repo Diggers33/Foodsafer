@@ -1,6 +1,7 @@
 import { ApiError } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// Remove trailing slash from base URL to prevent double slashes
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = 'foodsafer_access_token';
@@ -88,6 +89,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
     data = JSON.parse(text) as ApiResponse<T>;
   } catch (e) {
     console.error('Failed to parse API response:', text.substring(0, 500));
+    // Check if server returned HTML instead of JSON
+    if (text.trim().startsWith('<!') || text.trim().startsWith('<html')) {
+      throw new ApiError('Server returned HTML instead of JSON. Check API URL configuration.', response.status);
+    }
     throw new ApiError('Invalid response from server', response.status);
   }
 
