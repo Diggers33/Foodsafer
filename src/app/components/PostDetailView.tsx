@@ -4,6 +4,7 @@ import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { LinkedInStylePost } from './LinkedInStylePost';
 import { api } from '@/api';
+import { useApp } from '../App';
 
 interface Post {
   id: string;
@@ -71,7 +72,49 @@ function mapReactor(r: any): Reactor {
   };
 }
 
+function formatTimeAgo(dateString: string): string {
+  if (!dateString) return '';
+  let date: Date;
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+  if (isNaN(date.getTime())) return dateString;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function mapComment(c: any): Comment {
+  const creator = c.creator || c.author || c.user || {};
+  const name = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.name || 'Unknown';
+  const avatar = creator.avatar ? (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`) : '';
+  const company = creator.userCompanies?.[0]?.company?.name || creator.organization || '';
+  return {
+    id: c.id,
+    author: {
+      name,
+      organization: company,
+      avatar,
+    },
+    timestamp: formatTimeAgo(c.createdAt || c.timestamp),
+    content: c.text || c.content || '',
+    isOwn: false,
+  };
+}
+
 export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailViewProps) {
+  const { currentUser } = useApp();
   const post = posts.find(p => p.id === postId);
   const isOwnPost = post?.author.name === 'You';
 
@@ -89,12 +132,31 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
   const [isSaved, setIsSaved] = useState(false);
   const [reactors, setReactors] = useState<Reactor[]>([]);
   const [isLoadingReactors, setIsLoadingReactors] = useState(false);
+  const [isLoadingComments, setIsLoadingComments] = useState(true);
+
+  // Fetch comments on mount
+  useEffect(() => {
+    fetchComments();
+  }, [postId]);
 
   useEffect(() => {
     if (showReactions && reactors.length === 0) {
       fetchReactors();
     }
   }, [showReactions]);
+
+  const fetchComments = async () => {
+    setIsLoadingComments(true);
+    try {
+      const data = await api.get<any[]>(`/queries/posts/${postId}/comments`);
+      const dataArray = Array.isArray(data) ? data : [];
+      setComments(dataArray.map(mapComment));
+    } catch (err) {
+      console.error('Failed to load comments:', err);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
 
   const fetchReactors = async () => {
     setIsLoadingReactors(true);
@@ -114,12 +176,20 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
 
   const handleAddComment = () => {
     if (newComment.trim()) {
+      const userName = currentUser
+        ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'You'
+        : 'You';
+      const userAvatar = currentUser?.avatar
+        ? (currentUser.avatar.startsWith('http') ? currentUser.avatar : `${API_BASE}${currentUser.avatar}`)
+        : '';
+      const userOrg = currentUser?.userCompanies?.[0]?.company?.name || '';
+
       const comment: Comment = {
         id: Date.now().toString(),
         author: {
-          name: 'You',
-          organization: 'Your Organization',
-          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
+          name: userName,
+          organization: userOrg,
+          avatar: userAvatar,
         },
         timestamp: 'Just now',
         content: newComment,
@@ -127,7 +197,7 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
       };
       setComments([...comments, comment]);
       setNewComment('');
-      
+
       // Update comment count
       setPosts(posts.map(p => p.id === postId ? { ...p, comments: p.comments + 1 } : p));
     }
@@ -537,7 +607,13 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
           <div className="px-4 py-3 border-b border-gray-100">
             <div className="flex gap-2">
               <Avatar className="w-10 h-10">
-                <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop" alt="You" className="w-full h-full object-cover" />
+                {currentUser?.avatar ? (
+                  <img src={currentUser.avatar.startsWith('http') ? currentUser.avatar : `${API_BASE}${currentUser.avatar}`} alt="You" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-medium">
+                    {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
+                  </div>
+                )}
               </Avatar>
               <div className="flex-1 flex gap-2">
                 <input
@@ -565,13 +641,23 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
           </div>
 
           {/* Comments List */}
-          {comments.length > 0 && (
+          {isLoadingComments ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+            </div>
+          ) : comments.length > 0 ? (
             <div className="divide-y divide-gray-100">
               {comments.map((comment) => (
                 <div key={comment.id} className="px-4 py-3">
                   <div className="flex items-start gap-3">
                     <Avatar className="w-10 h-10">
-                      <img src={comment.author.avatar} alt={comment.author.name} className="w-full h-full object-cover" />
+                      {comment.author.avatar ? (
+                        <img src={comment.author.avatar} alt={comment.author.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-medium">
+                          {comment.author.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        </div>
+                      )}
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -637,6 +723,10 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
                   </div>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-[#757575] text-sm">
+              No comments yet. Be the first to comment!
             </div>
           )}
         </div>
