@@ -62,22 +62,31 @@ export function WorkspaceDetail({ workspaceId, onBack }: WorkspaceDetailProps) {
         (data.thumbnail.startsWith('http') ? data.thumbnail : `${API_BASE}${data.thumbnail}`)
         : '';
 
-      // Map members if available
-      const members = (data.members || []).slice(0, 5).map((m: any) => ({
-        id: m.id || m.userId,
-        name: `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.name || 'Member',
-        avatar: m.avatar ? (m.avatar.startsWith('http') ? m.avatar : `${API_BASE}${m.avatar}`) : '',
-      }));
+      // Map participants (API uses 'participants' not 'members')
+      const participants = data.participants || data.members || [];
+      const members = participants.slice(0, 5).map((p: any) => {
+        const user = p.user || p;
+        return {
+          id: user.id || p.userId,
+          name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Member',
+          avatar: user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '',
+        };
+      });
+
+      // Extract tags from 'about' field if they exist (format: "text #tag1 #tag2")
+      const aboutText = data.about || data.description || '';
+      const tagMatches = aboutText.match(/#\w+/g) || [];
+      const tags = tagMatches.map((t: string) => t.substring(1)); // Remove # prefix
 
       setWorkspace({
         id: data.id,
         name: data.name || 'Untitled Workspace',
-        subtitle: data.subtitle || data.shortDescription || '',
+        subtitle: data.subName || data.subtitle || data.shortDescription || '',
         thumbnail,
-        description: data.description || '',
+        description: aboutText.replace(/#\w+/g, '').trim() || '', // Remove tags from description
         members,
-        totalMembers: data.memberCount || data.numMembers || members.length,
-        tags: data.tags || [],
+        totalMembers: participants.length || data.memberCount || data.numMembers || 0,
+        tags,
         unreadCounts: {
           discussions: data.unreadDiscussions || 0,
           meetings: data.unreadMeetings || 0,
