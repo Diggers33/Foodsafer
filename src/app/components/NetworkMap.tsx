@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Search, Filter, List, MapPin, Navigation, MessageSquare, Users as UsersIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, List, MapPin, Navigation, MessageSquare, Users as UsersIcon, Loader2 } from 'lucide-react';
 import { AppHeader } from './AppHeader';
 import { OrganizationDetail } from './OrganizationDetail';
 import { MessagesList } from './MessagesList';
 import { ConnectionsList } from './ConnectionsList';
 import { NetworkSearch } from './NetworkSearch';
 import { GoogleMapView } from './GoogleMapView';
+import { api } from '@/api';
 
 interface NetworkItem {
   id: string;
@@ -18,48 +19,23 @@ interface NetworkItem {
   lng: number;
 }
 
-const mockItems: NetworkItem[] = [
-  {
-    id: '1',
-    name: 'FreshPro Organic Foods',
-    category: 'Food Manufacturer',
-    location: 'Portland, OR',
-    distance: '2.3 mi',
-    thumbnail: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=300&fit=crop',
-    lat: 45.5155,
-    lng: -122.6789,
-  },
-  {
-    id: '2',
-    name: 'SafetyFirst Lab Services',
-    category: 'Testing Laboratory',
-    location: 'Portland, OR',
-    distance: '4.7 mi',
-    thumbnail: 'https://images.unsplash.com/photo-1582719471137-c3967ffb1c42?w=400&h=300&fit=crop',
-    lat: 45.5231,
-    lng: -122.6765,
-  },
-  {
-    id: '3',
-    name: 'NutriGreen Solutions',
-    category: 'Consultant',
-    location: 'Beaverton, OR',
-    distance: '8.1 mi',
-    thumbnail: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&h=300&fit=crop',
-    lat: 45.4871,
-    lng: -122.8037,
-  },
-  {
-    id: '4',
-    name: 'Pacific Food Safety Institute',
-    category: 'Training Provider',
-    location: 'Portland, OR',
-    distance: '5.2 mi',
-    thumbnail: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=400&h=300&fit=crop',
-    lat: 45.5289,
-    lng: -122.6625,
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function mapCompany(c: any): NetworkItem {
+  const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
+  const address = c.address || c.city || c.country || '';
+
+  return {
+    id: c.id,
+    name: c.name || 'Unknown Company',
+    category: c.type || c.category || 'Organization',
+    location: address,
+    distance: '',
+    thumbnail: logo,
+    lat: c.latitude || c.lat || 0,
+    lng: c.longitude || c.lng || 0,
+  };
+}
 
 export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   const [view, setView] = useState<'map' | 'list'>('map');
@@ -67,6 +43,28 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   const [showMessages, setShowMessages] = useState(false);
   const [showConnections, setShowConnections] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [companies, setCompanies] = useState<NetworkItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
+
+  const fetchCompanies = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>('/queries/companies');
+      const companiesArray = Array.isArray(data) ? data : [];
+      setCompanies(companiesArray.map(mapCompany));
+    } catch (err) {
+      console.error('Failed to load companies:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load companies');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedOrg) {
     return <OrganizationDetail orgId={selectedOrg} onBack={() => setSelectedOrg(null)} />;
@@ -94,8 +92,8 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
     );
   }
 
-  // Convert mockItems to Google Maps location format
-  const mapLocations = mockItems.map(item => ({
+  // Convert companies to Google Maps location format
+  const mapLocations = companies.filter(c => c.lat && c.lng).map(item => ({
     id: item.id,
     name: item.name,
     category: item.category,
@@ -154,13 +152,23 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3"></div>
             <div className="px-4 pb-4">
               <div className="flex items-center justify-between mb-3">
-                <h3>{mockItems.length} items in this area</h3>
+                <h3>{companies.length} items in this area</h3>
               </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {mockItems.map((item) => (
-                  <NetworkItemCard key={item.id} item={item} compact onSelect={() => setSelectedOrg(item.id)} />
-                ))}
-              </div>
+              {isLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+                </div>
+              ) : error ? (
+                <p className="text-red-600 text-sm text-center py-4">{error}</p>
+              ) : companies.length === 0 ? (
+                <p className="text-[#757575] text-center py-4">No organizations found</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {companies.map((item) => (
+                    <NetworkItemCard key={item.id} item={item} compact onSelect={() => setSelectedOrg(item.id)} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -169,14 +177,26 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       {/* List View */}
       {view === 'list' && (
         <div className="px-4 py-4">
-          <div className="mb-3 text-sm text-[#757575]">
-            {mockItems.length} organizations near you
-          </div>
-          <div className="space-y-3">
-            {mockItems.map((item) => (
-              <NetworkItemCard key={item.id} item={item} onSelect={() => setSelectedOrg(item.id)} />
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+            </div>
+          ) : error ? (
+            <p className="text-red-600 text-sm text-center py-8">{error}</p>
+          ) : companies.length === 0 ? (
+            <p className="text-[#757575] text-center py-8">No organizations found</p>
+          ) : (
+            <>
+              <div className="mb-3 text-sm text-[#757575]">
+                {companies.length} organizations
+              </div>
+              <div className="space-y-3">
+                {companies.map((item) => (
+                  <NetworkItemCard key={item.id} item={item} onSelect={() => setSelectedOrg(item.id)} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

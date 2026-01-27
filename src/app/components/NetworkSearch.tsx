@@ -1,6 +1,7 @@
-import { ArrowLeft, Search, MapPin, Building2, Beaker, GraduationCap, Users, Wrench } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, Search, MapPin, Building2, Beaker, GraduationCap, Users, Wrench, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { Badge } from './ui/badge';
+import { api } from '@/api';
 
 interface SearchResult {
   id: string;
@@ -13,36 +14,40 @@ interface SearchResult {
   verified?: boolean;
 }
 
-const mockResults: SearchResult[] = [
-  {
-    id: '1',
-    name: 'FreshPro Organic Foods',
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function mapCompanyToResult(c: any): SearchResult {
+  const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
+  const address = c.address || c.city || c.country || '';
+
+  return {
+    id: c.id,
+    name: c.name || 'Unknown',
     type: 'organization',
-    category: 'Food Manufacturer',
-    location: 'Portland, OR',
-    thumbnail: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=300&fit=crop',
-    description: 'Leading organic food manufacturer',
-    verified: true,
-  },
-  {
-    id: '2',
-    name: 'Sarah Johnson',
+    category: c.type || c.category || 'Organization',
+    location: address,
+    thumbnail: logo,
+    description: c.description || '',
+    verified: c.verified || c.isVerified || false,
+  };
+}
+
+function mapUserToResult(u: any): SearchResult {
+  const avatar = u.avatar ? (u.avatar.startsWith('http') ? u.avatar : `${API_BASE}${u.avatar}`) : '';
+  const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Unknown';
+  const company = u.userCompanies?.[0]?.company?.name || '';
+
+  return {
+    id: u.id,
+    name,
     type: 'person',
-    category: 'Food Safety Manager',
-    location: 'Portland, OR',
-    thumbnail: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-    description: 'FreshPro Organic Foods',
-  },
-  {
-    id: '3',
-    name: 'SafetyFirst Lab Services',
-    type: 'organization',
-    category: 'Testing Laboratory',
-    location: 'Portland, OR',
-    thumbnail: 'https://images.unsplash.com/photo-1582719471137-c3967ffb1c42?w=400&h=300&fit=crop',
-    verified: true,
-  },
-];
+    category: u.jobTitle || u.role || 'Member',
+    location: u.city || u.country || '',
+    thumbnail: avatar,
+    description: company,
+    verified: false,
+  };
+}
 
 const categories = [
   { id: 'all', label: 'All', icon: null },
@@ -56,13 +61,77 @@ const categories = [
 export function NetworkSearch({ onBack, onSelect }: { onBack: () => void; onSelect: (id: string, type: string) => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [initialCompanies, setInitialCompanies] = useState<SearchResult[]>([]);
 
-  const filteredResults = mockResults.filter((result) => {
-    const matchesSearch = result.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         result.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || 
+  // Load initial companies on mount
+  useEffect(() => {
+    fetchInitialCompanies();
+  }, []);
+
+  const fetchInitialCompanies = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.get<any[]>('/queries/companies');
+      const companiesArray = Array.isArray(data) ? data : [];
+      const mapped = companiesArray.map(mapCompanyToResult);
+      setInitialCompanies(mapped);
+      setResults(mapped);
+    } catch (err) {
+      console.error('Failed to load companies:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Search when query changes
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setResults(initialCompanies);
+      return;
+    }
+
+    const searchTimeout = setTimeout(async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        // Search companies
+        const companiesData = await api.get<any[]>(`/queries/companies/search?q=${encodeURIComponent(searchQuery)}`);
+        const companies = Array.isArray(companiesData) ? companiesData.map(mapCompanyToResult) : [];
+
+        // Try to search users as well
+        let users: SearchResult[] = [];
+        try {
+          const usersData = await api.get<any[]>(`/queries/users/search?q=${encodeURIComponent(searchQuery)}`);
+          users = Array.isArray(usersData) ? usersData.map(mapUserToResult) : [];
+        } catch {
+          // Users search may not be available
+        }
+
+        setResults([...companies, ...users]);
+      } catch (err) {
+        console.error('Search failed:', err);
+        // Fallback to filtering initial companies
+        const filtered = initialCompanies.filter(r =>
+          r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          r.category.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setResults(filtered);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(searchTimeout);
+  }, [searchQuery, initialCompanies]);
+
+  const filteredResults = results.filter((result) => {
+    const matchesCategory = selectedCategory === 'all' ||
                            result.category.toLowerCase().includes(selectedCategory);
-    return matchesSearch && matchesCategory;
+    return matchesCategory;
   });
 
   return (
@@ -109,60 +178,70 @@ export function NetworkSearch({ onBack, onSelect }: { onBack: () => void; onSele
 
       {/* Results */}
       <div className="px-4 py-4">
-        {searchQuery && (
-          <p className="text-sm text-[#757575] mb-3">
-            {filteredResults.length} results for "{searchQuery}"
-          </p>
-        )}
-
-        <div className="space-y-3">
-          {filteredResults.map((result) => (
-            <article
-              key={result.id}
-              onClick={() => onSelect(result.id, result.type)}
-              className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <div className={`${
-                  result.type === 'organization' ? 'w-16 h-16' : 'w-14 h-14'
-                } rounded-${result.type === 'person' ? 'full' : 'lg'} overflow-hidden bg-gray-100 flex-shrink-0`}>
-                  <img
-                    src={result.thumbnail}
-                    alt={result.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="line-clamp-1 mb-0.5">{result.name}</h4>
-                  <p className="text-sm text-[#757575] line-clamp-1 mb-1">{result.category}</p>
-                  {result.description && (
-                    <p className="text-xs text-[#757575] line-clamp-1 mb-1">{result.description}</p>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 text-xs text-[#757575]">
-                      <MapPin className="w-3 h-3" />
-                      <span>{result.location}</span>
-                    </div>
-                    {result.verified && (
-                      <Badge className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] border-none text-xs px-1.5 py-0">
-                        Verified
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-
-        {filteredResults.length === 0 && searchQuery && (
-          <div className="text-center py-12">
-            <Search className="w-12 h-12 text-[#757575] mx-auto mb-3" />
-            <h3 className="mb-2">No results found</h3>
-            <p className="text-sm text-[#757575] max-w-xs mx-auto">
-              Try adjusting your search or filters
-            </p>
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
           </div>
+        ) : error && results.length === 0 ? (
+          <p className="text-red-600 text-sm text-center py-8">{error}</p>
+        ) : (
+          <>
+            {searchQuery && (
+              <p className="text-sm text-[#757575] mb-3">
+                {filteredResults.length} results for "{searchQuery}"
+              </p>
+            )}
+
+            <div className="space-y-3">
+              {filteredResults.map((result) => (
+                <article
+                  key={result.id}
+                  onClick={() => onSelect(result.id, result.type)}
+                  className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`${
+                      result.type === 'organization' ? 'w-16 h-16' : 'w-14 h-14'
+                    } rounded-${result.type === 'person' ? 'full' : 'lg'} overflow-hidden bg-gray-100 flex-shrink-0`}>
+                      <img
+                        src={result.thumbnail}
+                        alt={result.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="line-clamp-1 mb-0.5">{result.name}</h4>
+                      <p className="text-sm text-[#757575] line-clamp-1 mb-1">{result.category}</p>
+                      {result.description && (
+                        <p className="text-xs text-[#757575] line-clamp-1 mb-1">{result.description}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-xs text-[#757575]">
+                          <MapPin className="w-3 h-3" />
+                          <span>{result.location}</span>
+                        </div>
+                        {result.verified && (
+                          <Badge className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] border-none text-xs px-1.5 py-0">
+                            Verified
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {filteredResults.length === 0 && searchQuery && (
+              <div className="text-center py-12">
+                <Search className="w-12 h-12 text-[#757575] mx-auto mb-3" />
+                <h3 className="mb-2">No results found</h3>
+                <p className="text-sm text-[#757575] max-w-xs mx-auto">
+                  Try adjusting your search or filters
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

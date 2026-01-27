@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ArrowLeft, Search, Filter, Play, Clock, Users, Star, Award, BookOpen } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Search, Filter, Play, Clock, Users, Star, Award, BookOpen, Loader2 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { TrainingDetail } from './TrainingDetail';
+import { api } from '@/api';
 
 interface Course {
   id: string;
@@ -19,82 +20,66 @@ interface Course {
   progress?: number;
 }
 
-const mockCourses: Course[] = [
-  {
-    id: '1',
-    title: 'HACCP Fundamentals Certification',
-    description: 'Complete certification course covering all seven principles of HACCP',
-    instructor: 'Dr. Maria Rodriguez',
-    thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=300&fit=crop',
-    duration: '8 hours',
-    students: 2456,
-    rating: 4.9,
-    level: 'Beginner',
-    lessons: 24,
-    certified: true,
-    progress: 0,
-  },
-  {
-    id: '2',
-    title: 'Advanced Allergen Management',
-    description: 'In-depth training on allergen control, testing, and verification methods',
-    instructor: 'James Chen',
-    thumbnail: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=400&h=300&fit=crop',
-    duration: '6 hours',
-    students: 1834,
-    rating: 4.8,
-    level: 'Advanced',
-    lessons: 18,
-    certified: true,
-    progress: 45,
-  },
-  {
-    id: '3',
-    title: 'Food Safety Culture Building',
-    description: 'Learn to create and maintain a positive food safety culture in your organization',
-    instructor: 'Sarah Williams',
-    thumbnail: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop',
-    duration: '4 hours',
-    students: 1567,
-    rating: 4.7,
-    level: 'Intermediate',
-    lessons: 12,
-    certified: false,
-    progress: 0,
-  },
-  {
-    id: '4',
-    title: 'Sanitation Standard Operating Procedures',
-    description: 'Comprehensive guide to developing and implementing effective sanitation SOPs',
-    instructor: 'Michael Brown',
-    thumbnail: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400&h=300&fit=crop',
-    duration: '5 hours',
-    students: 2103,
-    rating: 4.8,
-    level: 'Intermediate',
-    lessons: 15,
-    certified: true,
-    progress: 0,
-  },
-  {
-    id: '5',
-    title: 'Microbiological Testing & Analysis',
-    description: 'Understanding microbiological testing methods and interpreting results',
-    instructor: 'Dr. Emily Zhang',
-    thumbnail: 'https://images.unsplash.com/photo-1582719471137-c3967ffb1c42?w=400&h=300&fit=crop',
-    duration: '7 hours',
-    students: 1245,
-    rating: 4.9,
-    level: 'Advanced',
-    lessons: 20,
-    certified: true,
-    progress: 0,
-  },
-];
+const API_BASE = 'https://test.foodsafer.com/api';
+
+function formatDuration(minutes: number): string {
+  if (!minutes) return '';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours} hours`;
+}
+
+function mapCourse(t: any): Course {
+  const instructor = t.instructor || t.creator || {};
+  const instructorName = typeof instructor === 'string'
+    ? instructor
+    : `${instructor.firstName || ''} ${instructor.lastName || ''}`.trim() || 'Unknown';
+
+  const thumbnail = t.thumbnail || t.image || t.cover;
+  const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
+
+  return {
+    id: t.id,
+    title: t.title || t.name || 'Untitled Course',
+    description: t.description || t.content || '',
+    instructor: instructorName,
+    thumbnail: thumbUrl,
+    duration: formatDuration(t.duration || t.durationMinutes || 0),
+    students: t.enrolledCount || t.students || t.participantsCount || 0,
+    rating: t.rating || t.averageRating || 0,
+    level: t.level || t.difficulty || 'Beginner',
+    lessons: t.lessonsCount || t.modulesCount || t.lessons || 0,
+    certified: t.certified ?? t.hasCertificate ?? false,
+    progress: t.progress || 0,
+  };
+}
 
 export function TrainingList({ onBack }: { onBack: () => void }) {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const fetchCourses = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>('/queries/trainings');
+      const coursesArray = Array.isArray(data) ? data.map(mapCourse) : [];
+      setCourses(coursesArray);
+    } catch (err) {
+      console.error('Failed to load courses:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load courses');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedCourse) {
     return (
@@ -106,8 +91,8 @@ export function TrainingList({ onBack }: { onBack: () => void }) {
   }
 
   const filteredCourses = activeTab === 'inProgress'
-    ? mockCourses.filter(c => c.progress && c.progress > 0)
-    : mockCourses;
+    ? courses.filter(c => c.progress && c.progress > 0)
+    : courses;
 
   const getLevelColor = (level: string) => {
     switch (level) {
@@ -160,7 +145,21 @@ export function TrainingList({ onBack }: { onBack: () => void }) {
 
       {/* Content */}
       <div className="px-4 py-4 space-y-4">
-        {filteredCourses.map((course) => (
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-[#FF9800]" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        ) : filteredCourses.length === 0 ? (
+          <div className="text-center py-8">
+            <BookOpen className="w-12 h-12 text-[#757575] mx-auto mb-3" />
+            <p className="text-[#757575]">No courses available</p>
+          </div>
+        ) : (
+          filteredCourses.map((course) => (
           <article
             key={course.id}
             onClick={() => setSelectedCourse(course.id)}
@@ -238,7 +237,8 @@ export function TrainingList({ onBack }: { onBack: () => void }) {
               </div>
             </div>
           </article>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Learning Path Banner */}

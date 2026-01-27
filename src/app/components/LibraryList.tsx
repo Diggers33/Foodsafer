@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ArrowLeft, Search, Filter, FileText, Download, Eye, Bookmark, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Search, Filter, FileText, Download, Eye, Bookmark, Calendar, Loader2 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { api } from '@/api';
 
 interface Document {
   id: string;
@@ -15,104 +16,68 @@ interface Document {
   publisher: string;
 }
 
-const mockDocuments: Document[] = [
-  {
-    id: '1',
-    title: 'FDA Food Safety Modernization Act (FSMA) Guide',
-    description: 'Complete guide to understanding and implementing FSMA requirements',
-    category: 'Regulations',
-    type: 'PDF',
-    size: '2.4 MB',
-    downloads: 4523,
-    publishDate: '2026-01-05',
-    publisher: 'FDA',
-  },
-  {
-    id: '2',
-    title: 'Allergen Control Best Practices Whitepaper',
-    description: 'Industry best practices for allergen management and control',
-    category: 'Best Practices',
-    type: 'PDF',
-    size: '1.8 MB',
-    downloads: 3214,
-    publishDate: '2026-01-03',
-    publisher: 'Global Food Standards',
-  },
-  {
-    id: '3',
-    title: 'ISO 22000:2018 Standard Documentation',
-    description: 'Official ISO 22000 food safety management system standard',
-    category: 'Standards',
-    type: 'PDF',
-    size: '3.2 MB',
-    downloads: 5678,
-    publishDate: '2025-12-28',
-    publisher: 'ISO',
-  },
-  {
-    id: '4',
-    title: 'HACCP Plan Template',
-    description: 'Customizable template for creating comprehensive HACCP plans',
-    category: 'Templates',
-    type: 'DOC',
-    size: '856 KB',
-    downloads: 8934,
-    publishDate: '2025-12-20',
-    publisher: 'FoodSafer Community',
-  },
-  {
-    id: '5',
-    title: 'Food Safety Audit Checklist',
-    description: 'Comprehensive checklist for conducting internal food safety audits',
-    category: 'Templates',
-    type: 'XLS',
-    size: '645 KB',
-    downloads: 6432,
-    publishDate: '2025-12-15',
-    publisher: 'FoodSafer Community',
-  },
-  {
-    id: '6',
-    title: 'Sanitation SOP Template Package',
-    description: 'Complete set of sanitation standard operating procedure templates',
-    category: 'Templates',
-    type: 'DOC',
-    size: '1.2 MB',
-    downloads: 5123,
-    publishDate: '2025-12-10',
-    publisher: 'SafeFood Consulting',
-  },
-  {
-    id: '7',
-    title: 'Global Food Safety Initiative (GFSI) Overview',
-    description: 'Comprehensive overview of GFSI benchmarked schemes',
-    category: 'Standards',
-    type: 'PDF',
-    size: '2.1 MB',
-    downloads: 3456,
-    publishDate: '2025-12-05',
-    publisher: 'GFSI',
-  },
-  {
-    id: '8',
-    title: 'Traceability Implementation Presentation',
-    description: 'Step-by-step guide to implementing food traceability systems',
-    category: 'Best Practices',
-    type: 'PPT',
-    size: '4.5 MB',
-    downloads: 2789,
-    publishDate: '2025-11-28',
-    publisher: 'FoodTech Innovations',
-  },
-];
+function formatFileSize(bytes: number): string {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileType(filename: string): 'PDF' | 'DOC' | 'XLS' | 'PPT' {
+  const ext = (filename || '').split('.').pop()?.toLowerCase();
+  if (ext === 'pdf') return 'PDF';
+  if (ext === 'doc' || ext === 'docx') return 'DOC';
+  if (ext === 'xls' || ext === 'xlsx') return 'XLS';
+  if (ext === 'ppt' || ext === 'pptx') return 'PPT';
+  return 'PDF';
+}
+
+function mapDocument(item: any): Document {
+  const creator = item.creator || item.author || {};
+  const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
+
+  return {
+    id: item.id,
+    title: item.title || item.name || 'Untitled',
+    description: item.description || item.content || '',
+    category: item.category || item.type || 'Document',
+    type: getFileType(item.filename || item.name || ''),
+    size: formatFileSize(item.size || item.fileSize || 0),
+    downloads: item.downloads || item.downloadCount || 0,
+    publishDate: item.createdAt || item.publishDate || '',
+    publisher: creatorName || item.publisher || 'Unknown',
+  };
+}
 
 export function LibraryList({ onBack }: { onBack: () => void }) {
   const [activeTab, setActiveTab] = useState('all');
   const [savedDocs, setSavedDocs] = useState<Set<string>>(new Set());
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  const fetchDocuments = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<any[]>('/queries/libraries');
+      const docs = Array.isArray(data) ? data.map(mapDocument) : [];
+      setDocuments(docs);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load documents');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredDocs = activeTab === 'saved'
-    ? mockDocuments.filter(d => savedDocs.has(d.id))
-    : mockDocuments;
+    ? documents.filter(d => savedDocs.has(d.id))
+    : documents;
 
   const toggleSaved = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -178,10 +143,23 @@ export function LibraryList({ onBack }: { onBack: () => void }) {
 
       {/* Content */}
       <div className="px-4 py-4 space-y-3">
-        {filteredDocs.length === 0 && activeTab === 'saved' ? (
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-[#9C27B0]" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        ) : filteredDocs.length === 0 && activeTab === 'saved' ? (
           <div className="text-center py-12">
             <Bookmark className="w-12 h-12 text-[#757575] mx-auto mb-3" />
             <p className="text-[#757575]">No saved documents yet</p>
+          </div>
+        ) : filteredDocs.length === 0 ? (
+          <div className="text-center py-12">
+            <FileText className="w-12 h-12 text-[#757575] mx-auto mb-3" />
+            <p className="text-[#757575]">No documents available</p>
           </div>
         ) : (
           filteredDocs.map((doc) => (

@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Search, Shield, Wrench, GraduationCap, Library, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Shield, Wrench, GraduationCap, Library, ChevronRight, Loader2 } from 'lucide-react';
 import { AppHeader } from './AppHeader';
 import { FrameworkList } from './FrameworkList';
 import { ToolkitList } from './ToolkitList';
 import { TrainingList } from './TrainingList';
 import { LibraryList } from './LibraryList';
+import { api } from '@/api';
 
 interface ResourceCategory {
   id: string;
@@ -14,6 +15,15 @@ interface ResourceCategory {
   color: string;
   gradient: string;
 }
+
+interface RecentItem {
+  id: string;
+  title: string;
+  type: string;
+  thumbnail: string;
+}
+
+const API_BASE = 'https://test.foodsafer.com/api';
 
 const categories: ResourceCategory[] = [
   {
@@ -50,29 +60,41 @@ const categories: ResourceCategory[] = [
   },
 ];
 
-const recentlyViewed = [
-  {
-    id: '1',
-    title: 'HACCP Guidelines 2026',
-    type: 'Framework',
-    thumbnail: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=300&fit=crop',
-  },
-  {
-    id: '2',
-    title: 'Allergen Management Training',
-    type: 'Training',
-    thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=300&fit=crop',
-  },
-  {
-    id: '3',
-    title: 'FDA Food Safety Modernization Act',
-    type: 'Library',
-    thumbnail: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?w=400&h=300&fit=crop',
-  },
-];
+function mapLibraryItem(item: any): RecentItem {
+  const thumbnail = item.thumbnail || item.image || item.cover;
+  const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
+
+  return {
+    id: item.id,
+    title: item.title || item.name || 'Untitled',
+    type: item.type || item.category || 'Library',
+    thumbnail: thumbUrl,
+  };
+}
 
 export function ResourcesHub({ onProfileClick }: { onProfileClick: () => void }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchRecentItems();
+  }, []);
+
+  const fetchRecentItems = async () => {
+    setIsLoading(true);
+    try {
+      // Try to fetch libraries
+      const data = await api.get<any[]>('/queries/libraries');
+      const items = Array.isArray(data) ? data.slice(0, 5).map(mapLibraryItem) : [];
+      setRecentItems(items);
+    } catch (err) {
+      console.error('Failed to load recent items:', err);
+      // Leave as empty array
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (selectedCategory === 'framework') {
     return <FrameworkList onBack={() => setSelectedCategory(null)} />;
@@ -130,25 +152,41 @@ export function ResourcesHub({ onProfileClick }: { onProfileClick: () => void })
             <h2>Recently Viewed</h2>
             <button className="text-[#2E7D32] text-sm">See all</button>
           </div>
-          <div className="space-y-3">
-            {recentlyViewed.map((item) => (
-              <article
-                key={item.id}
-                className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3"
-              >
-                <div className="w-20 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                  <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
-                </div>
-                <div className="flex-1 min-w-0 flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="line-clamp-1 mb-1">{item.title}</h4>
-                    <p className="text-sm text-[#757575]">{item.type}</p>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+            </div>
+          ) : recentItems.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-[#757575]">No recent items</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentItems.map((item) => (
+                <article
+                  key={item.id}
+                  className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3"
+                >
+                  <div className="w-20 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                    {item.thumbnail ? (
+                      <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Library className="w-6 h-6 text-[#757575]" />
+                      </div>
+                    )}
                   </div>
-                  <ChevronRight className="w-5 h-5 text-[#757575] flex-shrink-0" />
-                </div>
-              </article>
-            ))}
-          </div>
+                  <div className="flex-1 min-w-0 flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="line-clamp-1 mb-1">{item.title}</h4>
+                      <p className="text-sm text-[#757575]">{item.type}</p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-[#757575] flex-shrink-0" />
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
