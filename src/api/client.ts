@@ -25,6 +25,12 @@ export function clearTokens(): void {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
+// CQRS Response format from FoodSafer API
+interface ApiResponse<T> {
+  result: T;
+  status: 'OK' | 'KO';
+}
+
 // Request helper
 async function request<T>(
   endpoint: string,
@@ -55,13 +61,7 @@ async function request<T>(
       const newAccessToken = getAccessToken();
       (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
       const retryResponse = await fetch(url, { ...options, headers });
-
-      if (!retryResponse.ok) {
-        const errorData = await retryResponse.json().catch(() => ({}));
-        throw new ApiError(errorData.message || 'Request failed', retryResponse.status);
-      }
-
-      return retryResponse.json();
+      return parseResponse<T>(retryResponse);
     } else {
       // Refresh failed, clear tokens
       clearTokens();
@@ -69,18 +69,31 @@ async function request<T>(
     }
   }
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(errorData.message || 'Request failed', response.status);
-  }
+  return parseResponse<T>(response);
+}
 
-  // Handle empty responses
+// Parse CQRS response format
+async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
+
   if (!text) {
+    if (!response.ok) {
+      throw new ApiError('Request failed', response.status);
+    }
     return {} as T;
   }
 
-  return JSON.parse(text);
+  const data = JSON.parse(text) as ApiResponse<T>;
+
+  // Handle CQRS response format
+  if (data.status === 'KO') {
+    const errorResult = data.result as { code?: string; message?: string };
+    const errorMessage = errorResult.message || errorResult.code || 'Request failed';
+    throw new ApiError(errorMessage, response.status);
+  }
+
+  // Return the unwrapped result
+  return data.result;
 }
 
 // Refresh token helper
@@ -97,8 +110,10 @@ async function refreshAccessToken(): Promise<boolean> {
 
     if (!response.ok) return false;
 
-    const data = await response.json();
-    setTokens(data.accessToken, data.refreshToken);
+    const data = await response.json() as ApiResponse<{ accessToken: string; refreshToken: string }>;
+    if (data.status === 'KO') return false;
+
+    setTokens(data.result.accessToken, data.result.refreshToken);
     return true;
   } catch {
     return false;
