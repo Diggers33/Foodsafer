@@ -35,6 +35,11 @@ interface CourseData {
   }>;
 }
 
+// Check if URL is a YouTube video
+function isYouTubeUrl(url: string): boolean {
+  return url.includes('youtube.com') || url.includes('youtu.be');
+}
+
 // Convert YouTube URL to embed URL
 function getYouTubeEmbedUrl(url: string): string | null {
   if (!url) return null;
@@ -52,12 +57,12 @@ function getYouTubeEmbedUrl(url: string): string | null {
     }
   }
 
-  // If it's already an embed URL or direct video, return as is
-  if (url.includes('youtube.com/embed') || url.includes('vimeo.com')) {
-    return url;
+  // If it's already an embed URL, return as is
+  if (url.includes('youtube.com/embed')) {
+    return url.includes('?') ? url : `${url}?autoplay=1`;
   }
 
-  return url;
+  return null;
 }
 
 const API_BASE = 'https://my.foodsafer.com:443/api';
@@ -87,8 +92,14 @@ function mapCourse(t: any): CourseData {
   const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
 
   // Get video URL from various possible fields
-  const videoUrl = t.videoUrl || t.video || t.youtubeUrl || t.youtubeLink ||
-                   t.videoLink || t.mediaUrl || t.url || '';
+  // If fileId exists, construct the file URL
+  let videoUrl = t.videoUrl || t.video || t.youtubeUrl || t.youtubeLink ||
+                 t.videoLink || t.mediaUrl || t.url || '';
+
+  // If no direct URL but has fileId, construct the file URL
+  if (!videoUrl && t.fileId) {
+    videoUrl = `${API_BASE}/files/${t.fileId}`;
+  }
 
   const modules = (t.modules || t.sections || []).map((m: any, mIdx: number) => ({
     id: m.id || String(mIdx + 1),
@@ -208,13 +219,25 @@ export function TrainingDetail({ courseId, onBack }: { courseId: string; onBack:
       {/* Hero Video/Image */}
       <div className="relative h-56 bg-gray-900">
         {isPlayingVideo && course.videoUrl ? (
-          <iframe
-            src={getYouTubeEmbedUrl(course.videoUrl) || course.videoUrl}
-            className="w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title={course.title}
-          />
+          isYouTubeUrl(course.videoUrl) ? (
+            <iframe
+              src={getYouTubeEmbedUrl(course.videoUrl) || course.videoUrl}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              title={course.title}
+            />
+          ) : (
+            <video
+              src={course.videoUrl}
+              className="w-full h-full"
+              controls
+              autoPlay
+              playsInline
+            >
+              Your browser does not support the video tag.
+            </video>
+          )
         ) : (
           <>
             <img
