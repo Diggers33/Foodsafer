@@ -3,9 +3,23 @@ import { LoginRequest, LoginResponse, User } from './types';
 
 export const authService = {
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await api.post<LoginResponse>('/auth/login', credentials);
-    setTokens(response.accessToken, response.refreshToken);
-    return response;
+    // Clear any stale tokens before login attempt
+    clearTokens();
+
+    // API returns just the token string in result
+    const token = await api.post<string>('/auth/login', credentials);
+
+    // Store the token (use same token for both access and refresh)
+    setTokens(token, token);
+
+    // Fetch user info with the new token
+    const user = await this.getCurrentUser();
+
+    return {
+      accessToken: token,
+      refreshToken: token,
+      user,
+    };
   },
 
   async loginWithGoogle(token: string): Promise<LoginResponse> {
