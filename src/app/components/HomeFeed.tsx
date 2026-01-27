@@ -39,24 +39,25 @@ const reactionTypes = [
 
 // Helper to convert API post to display post
 function toDisplayPost(post: ApiPost, currentUserId?: string): DisplayPost {
-  const authorName = `${post.author.firstName} ${post.author.lastName}`.trim();
+  const author = post.author || {};
+  const authorName = `${author.firstName || ''} ${author.lastName || ''}`.trim() || 'Unknown';
   return {
     id: post.id,
     author: {
       name: authorName,
-      organization: post.author.organization || '',
-      avatar: post.author.avatar || '',
+      organization: author.organization || '',
+      avatar: author.avatar || '',
     },
     timestamp: formatTimestamp(post.createdAt),
-    title: post.title,
-    content: post.content,
+    title: post.title || '',
+    content: post.content || '',
     image: post.images?.[0],
-    images: post.images,
-    documents: post.documents,
-    tags: post.tags,
-    reactions: post.reactionCount,
-    comments: post.commentCount,
-    isOwner: post.author.id === currentUserId,
+    images: post.images || [],
+    documents: post.documents || [],
+    tags: post.tags || [],
+    reactions: post.reactionCount || 0,
+    comments: post.commentCount || 0,
+    isOwner: author.id === currentUserId,
   };
 }
 
@@ -94,7 +95,9 @@ export function HomeFeed({ onProfileClick }: { onProfileClick: () => void }) {
     setError(null);
     try {
       const response = await postsService.getAll();
-      const displayPosts = response.data.map((post) => toDisplayPost(post, currentUser?.id));
+      // API returns array directly, not { data: [...] }
+      const postsArray = Array.isArray(response) ? response : response.data || [];
+      const displayPosts = postsArray.map((post) => toDisplayPost(post, currentUser?.id));
       setPosts(displayPosts);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load posts');
