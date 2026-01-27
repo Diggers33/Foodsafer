@@ -39,8 +39,13 @@ function mapDocument(item: any): Document {
   const creator = item.creator || item.author || {};
   const creatorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
 
-  // Get file URL - handle relative paths
-  const rawUrl = item.url || item.fileUrl || item.file || item.path || '';
+  // Debug: log the item to see what fields are available
+  console.log('Library item:', item);
+
+  // Get file URL - try multiple possible field names
+  const rawUrl = item.url || item.fileUrl || item.file || item.path ||
+                 item.downloadUrl || item.link || item.attachment ||
+                 item.document || item.resourceUrl || item.src || '';
   const fileUrl = rawUrl ? (rawUrl.startsWith('http') ? rawUrl : `${API_BASE}${rawUrl}`) : '';
 
   return {
@@ -48,7 +53,7 @@ function mapDocument(item: any): Document {
     title: item.title || item.name || 'Untitled',
     description: item.description || item.content || '',
     category: item.category || item.type || 'Document',
-    type: getFileType(item.filename || item.name || ''),
+    type: getFileType(item.filename || item.name || item.url || ''),
     size: formatFileSize(item.size || item.fileSize || 0),
     downloads: item.downloads || item.downloadCount || 0,
     publishDate: item.createdAt || item.publishDate || '',
