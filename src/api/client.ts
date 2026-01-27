@@ -83,7 +83,13 @@ async function parseResponse<T>(response: Response): Promise<T> {
     return {} as T;
   }
 
-  const data = JSON.parse(text) as ApiResponse<T>;
+  let data: ApiResponse<T>;
+  try {
+    data = JSON.parse(text) as ApiResponse<T>;
+  } catch (e) {
+    console.error('Failed to parse API response:', text.substring(0, 500));
+    throw new ApiError('Invalid response from server', response.status);
+  }
 
   // Handle CQRS response format
   if (data.status === 'KO') {
