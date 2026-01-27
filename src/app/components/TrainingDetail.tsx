@@ -14,6 +14,7 @@ interface CourseData {
     avatar: string;
   };
   thumbnail: string;
+  videoUrl: string;
   duration: string;
   students: number;
   rating: number;
@@ -34,6 +35,31 @@ interface CourseData {
   }>;
 }
 
+// Convert YouTube URL to embed URL
+function getYouTubeEmbedUrl(url: string): string | null {
+  if (!url) return null;
+
+  // Handle various YouTube URL formats
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return `https://www.youtube.com/embed/${match[1]}?autoplay=1`;
+    }
+  }
+
+  // If it's already an embed URL or direct video, return as is
+  if (url.includes('youtube.com/embed') || url.includes('vimeo.com')) {
+    return url;
+  }
+
+  return url;
+}
+
 const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function formatDuration(minutes: number): string {
@@ -45,6 +71,9 @@ function formatDuration(minutes: number): string {
 }
 
 function mapCourse(t: any): CourseData {
+  // Debug: log to see available fields
+  console.log('Training item:', t);
+
   const instructor = t.instructor || t.creator || {};
   const instructorName = typeof instructor === 'string'
     ? instructor
@@ -56,6 +85,10 @@ function mapCourse(t: any): CourseData {
 
   const thumbnail = t.thumbnail || t.image || t.cover;
   const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
+
+  // Get video URL from various possible fields
+  const videoUrl = t.videoUrl || t.video || t.youtubeUrl || t.youtubeLink ||
+                   t.videoLink || t.mediaUrl || t.url || '';
 
   const modules = (t.modules || t.sections || []).map((m: any, mIdx: number) => ({
     id: m.id || String(mIdx + 1),
@@ -77,6 +110,7 @@ function mapCourse(t: any): CourseData {
     description: t.description || t.content || '',
     instructor: { name: instructorName, title: instructorTitle, avatar: instructorAvatar },
     thumbnail: thumbUrl,
+    videoUrl,
     duration: formatDuration(t.duration || t.durationMinutes || 0),
     students: t.enrolledCount || t.students || t.participantsCount || 0,
     rating: t.rating || t.averageRating || 0,
@@ -90,6 +124,7 @@ function mapCourse(t: any): CourseData {
 
 export function TrainingDetail({ courseId, onBack }: { courseId: string; onBack: () => void }) {
   const [isSaved, setIsSaved] = useState(false);
+  const [isPlayingVideo, setIsPlayingVideo] = useState(false);
   const [course, setCourse] = useState<CourseData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,17 +206,34 @@ export function TrainingDetail({ courseId, onBack }: { courseId: string; onBack:
       </header>
 
       {/* Hero Video/Image */}
-      <div className="relative h-48 bg-gray-100">
-        <img
-          src={course.thumbnail}
-          alt={course.title}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
-            <Play className="w-8 h-8 text-[#FF9800] ml-1" fill="#FF9800" />
-          </div>
-        </div>
+      <div className="relative h-56 bg-gray-900">
+        {isPlayingVideo && course.videoUrl ? (
+          <iframe
+            src={getYouTubeEmbedUrl(course.videoUrl) || course.videoUrl}
+            className="w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title={course.title}
+          />
+        ) : (
+          <>
+            <img
+              src={course.thumbnail}
+              alt={course.title}
+              className="w-full h-full object-cover"
+            />
+            {course.videoUrl && (
+              <button
+                onClick={() => setIsPlayingVideo(true)}
+                className="absolute inset-0 bg-black/30 flex items-center justify-center"
+              >
+                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+                  <Play className="w-8 h-8 text-[#FF9800] ml-1" fill="#FF9800" />
+                </div>
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* Content */}
