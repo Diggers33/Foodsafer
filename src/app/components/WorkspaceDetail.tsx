@@ -235,15 +235,19 @@ export function WorkspaceDetail({ workspaceId, onBack }: WorkspaceDetailProps) {
         {/* Tags */}
         {workspace.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
-            {workspace.tags.map((tag) => (
-              <Badge
-                key={tag}
-                variant="secondary"
-                className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] text-xs"
-              >
-                #{tag}
-              </Badge>
-            ))}
+            {workspace.tags.map((tag) => {
+              const tagName = typeof tag === 'object' && tag !== null ? (tag as any).name : tag;
+              const tagKey = typeof tag === 'object' && tag !== null ? (tag as any).id || tagName : tag;
+              return (
+                <Badge
+                  key={tagKey}
+                  variant="secondary"
+                  className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] text-xs"
+                >
+                  #{tagName}
+                </Badge>
+              );
+            })}
           </div>
         )}
 

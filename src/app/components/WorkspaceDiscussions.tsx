@@ -202,15 +202,19 @@ function DiscussionCard({
 
       {/* Tags */}
       <div className="flex flex-wrap gap-2 mb-3 pl-4">
-        {discussion.tags.map((tag) => (
-          <Badge
-            key={tag}
-            variant="secondary"
-            className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] text-xs"
-          >
-            #{tag}
-          </Badge>
-        ))}
+        {discussion.tags.map((tag) => {
+          const tagName = typeof tag === 'object' && tag !== null ? (tag as any).name : tag;
+          const tagKey = typeof tag === 'object' && tag !== null ? (tag as any).id || tagName : tag;
+          return (
+            <Badge
+              key={tagKey}
+              variant="secondary"
+              className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] text-xs"
+            >
+              #{tagName}
+            </Badge>
+          );
+        })}
       </div>
 
       {/* Footer */}

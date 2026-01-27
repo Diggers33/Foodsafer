@@ -365,15 +365,19 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
 
           {/* Tags */}
           <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2">
-            {post.tags.map((tag) => (
-              <Badge
-                key={tag}
-                variant="secondary"
-                className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] text-xs"
-              >
-                #{tag}
-              </Badge>
-            ))}
+            {post.tags.map((tag) => {
+              const tagName = typeof tag === 'object' && tag !== null ? (tag as any).name : tag;
+              const tagKey = typeof tag === 'object' && tag !== null ? (tag as any).id || tagName : tag;
+              return (
+                <Badge
+                  key={tagKey}
+                  variant="secondary"
+                  className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] text-xs"
+                >
+                  #{tagName}
+                </Badge>
+              );
+            })}
           </div>
 
           {/* Reaction Summary */}
