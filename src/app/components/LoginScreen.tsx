@@ -22,7 +22,7 @@ export function LoginScreen() {
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ email, password });
+      const response = await authService.login({ mail: email, password });
       login(response.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
