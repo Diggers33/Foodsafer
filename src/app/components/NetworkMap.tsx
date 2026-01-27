@@ -71,8 +71,10 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.get<any[]>('/queries/companies');
-      const companiesArray = Array.isArray(data) ? data : [];
+      // Fetch companies with higher limit to get more results
+      const response = await api.get<any>('/queries/companies?page=1&limit=500');
+      // Handle both array and paginated response formats
+      const companiesArray = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
       const mapped = companiesArray.map(mapCompany);
       const withCoords = mapped.filter(c => isFinite(c.lat) && isFinite(c.lng));
       console.log(`Companies: ${mapped.length} total, ${withCoords.length} with valid coordinates`);
