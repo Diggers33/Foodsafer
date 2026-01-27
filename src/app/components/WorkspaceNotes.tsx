@@ -22,6 +22,11 @@ interface Note {
 
 const API_BASE = 'https://my.foodsafer.com:443/api';
 
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
 function formatTimeAgo(dateString: string): string {
   if (!dateString) return '';
   let date: Date;
@@ -54,7 +59,7 @@ function mapNote(n: any): Note {
   return {
     id: n.id,
     title: n.title || n.name || 'Untitled',
-    preview: n.content || n.text || n.description || '',
+    preview: stripHtml(n.content || n.text || n.description || ''),
     author: { name: authorName, avatar },
     lastEdited: formatTimeAgo(n.updatedAt || n.createdAt),
     isPublic: n.isPublic ?? true,

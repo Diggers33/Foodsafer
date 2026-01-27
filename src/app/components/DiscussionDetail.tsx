@@ -201,9 +201,10 @@ export function DiscussionDetail({ discussionId, onBack }: DiscussionDetailProps
         <h2 className="mb-3">{discussion.title}</h2>
 
         {/* Content */}
-        <div className="text-[#212121] leading-relaxed mb-4 whitespace-pre-line">
-          {discussion.content}
-        </div>
+        <div
+          className="text-[#212121] leading-relaxed mb-4 prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: discussion.content }}
+        />
 
         {/* Attachments */}
         {discussion.attachments.length > 0 && (

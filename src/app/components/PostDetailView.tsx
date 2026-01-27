@@ -321,9 +321,10 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
           {/* Content */}
           <div className="px-4 pb-3">
             <h3 className="mb-2">{post.title}</h3>
-            <p className="text-[#212121] leading-snug whitespace-pre-wrap">
-              {post.content}
-            </p>
+            <div
+              className="text-[#212121] leading-snug prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: post.content }}
+            />
           </div>
 
           {/* Single Image */}

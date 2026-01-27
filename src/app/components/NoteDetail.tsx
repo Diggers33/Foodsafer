@@ -265,11 +265,10 @@ export function NoteDetail({ noteId, onBack }: NoteDetailProps) {
           </div>
 
           {/* Content */}
-          <div className="prose prose-sm max-w-none">
-            <div className="text-[#212121] leading-relaxed whitespace-pre-line">
-              {note.content}
-            </div>
-          </div>
+          <div
+            className="prose prose-sm max-w-none text-[#212121] leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: note.content }}
+          />
         </div>
       )}
     </div>

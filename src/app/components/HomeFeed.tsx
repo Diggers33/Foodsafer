@@ -349,9 +349,10 @@ function PostCard({
         onClick={() => setViewingPost(post.id)}
       >
         <h3 className="mb-1.5">{post.title}</h3>
-        <p className="text-[#212121] leading-snug line-clamp-3">
-          {post.content}
-        </p>
+        <div
+          className="text-[#212121] leading-snug line-clamp-3 prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: post.content }}
+        />
         <button className="text-[#36B9D0] text-sm mt-1">Read more</button>
       </div>
 

@@ -26,6 +26,11 @@ interface Discussion {
 
 const API_BASE = 'https://my.foodsafer.com:443/api';
 
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
 function formatTimeAgo(dateString: string): string {
   if (!dateString) return '';
 
@@ -63,7 +68,7 @@ function mapDiscussion(d: any): Discussion {
     id: d.id,
     title: d.title || d.name || 'Untitled',
     author: { name: authorName, avatar },
-    preview: d.text || d.content || d.description || '',
+    preview: stripHtml(d.text || d.content || d.description || ''),
     tags: d.tags || [],
     replyCount: d.commentsCount || d.replyCount || d.numComments || 0,
     lastActivity: formatTimeAgo(d.updatedAt || d.createdAt),
