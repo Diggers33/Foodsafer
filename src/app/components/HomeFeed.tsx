@@ -38,31 +38,55 @@ const reactionTypes = [
 ];
 
 // Helper to convert API post to display post
-function toDisplayPost(post: ApiPost, currentUserId?: string): DisplayPost {
-  const author = post.author || {};
-  const authorName = `${author.firstName || ''} ${author.lastName || ''}`.trim() || 'Unknown';
+function toDisplayPost(post: any, currentUserId?: string): DisplayPost {
+  // API uses 'creator' instead of 'author'
+  const creator = post.creator || post.author || {};
+  const authorName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || 'Unknown';
+
+  // Get organization from userCompanies if available
+  const organization = creator.userCompanies?.[0]?.company?.name || creator.organization || '';
+
+  // Avatar might be a relative path
+  const avatar = creator.avatar ?
+    (creator.avatar.startsWith('http') ? creator.avatar : `https://test.foodsafer.com${creator.avatar}`)
+    : '';
+
   return {
     id: post.id,
     author: {
       name: authorName,
-      organization: author.organization || '',
-      avatar: author.avatar || '',
+      organization,
+      avatar,
     },
     timestamp: formatTimestamp(post.createdAt),
     title: post.title || '',
-    content: post.content || '',
+    content: post.text || post.content || '',  // API uses 'text' instead of 'content'
     image: post.images?.[0],
     images: post.images || [],
     documents: post.documents || [],
     tags: post.tags || [],
-    reactions: post.reactionCount || 0,
-    comments: post.commentCount || 0,
-    isOwner: author.id === currentUserId,
+    reactions: post.reactionCount || post.reactions || 0,
+    comments: post.commentCount || post.comments || 0,
+    isOwner: creator.id === currentUserId || post.creatorId === currentUserId,
   };
 }
 
 function formatTimestamp(dateString: string): string {
-  const date = new Date(dateString);
+  if (!dateString) return '';
+
+  let date: Date;
+
+  // Handle DD/MM/YYYY HH:mm:ss+00:00 format from API
+  const ddmmyyyyMatch = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hour, min, sec] = ddmmyyyyMatch;
+    date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
+  } else {
+    date = new Date(dateString);
+  }
+
+  if (isNaN(date.getTime())) return dateString;
+
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -97,7 +121,6 @@ export function HomeFeed({ onProfileClick }: { onProfileClick: () => void }) {
       const response = await postsService.getAll();
       // API returns array directly, not { data: [...] }
       const postsArray = Array.isArray(response) ? response : response.data || [];
-      console.log('Posts from API:', JSON.stringify(postsArray[0], null, 2));
       const displayPosts = postsArray.map((post) => toDisplayPost(post, currentUser?.id));
       setPosts(displayPosts);
     } catch (err) {
