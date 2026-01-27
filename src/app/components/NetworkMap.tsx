@@ -176,9 +176,11 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             <div className="px-4 pb-4">
               {(() => {
                 // Filter to show only companies visible in current map view
+                // If no bounds calculated yet, show all companies with valid coords
+                const companiesWithCoords = companies.filter(c => isFinite(c.lat) && isFinite(c.lng));
                 const visibleCompanies = visibleCompanyIds.length > 0
-                  ? companies.filter(c => visibleCompanyIds.includes(c.id))
-                  : companies;
+                  ? companiesWithCoords.filter(c => visibleCompanyIds.includes(c.id))
+                  : companiesWithCoords;
                 const itemCount = visibleCompanies.length;
 
                 return (

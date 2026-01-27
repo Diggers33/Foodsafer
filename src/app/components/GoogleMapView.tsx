@@ -23,17 +23,7 @@ export function GoogleMapView({ locations, onMarkerClick, onBoundsChange }: Goog
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-  const [mapBounds, setMapBounds] = useState<google.maps.LatLngBounds | null>(null);
-
-  // Filter locations within current map bounds
-  useEffect(() => {
-    if (mapBounds && onBoundsChange) {
-      const visibleIds = locations
-        .filter(loc => mapBounds.contains(new google.maps.LatLng(loc.position.lat, loc.position.lng)))
-        .map(loc => loc.id);
-      onBoundsChange(visibleIds);
-    }
-  }, [mapBounds, locations, onBoundsChange]);
+  const [boundsDebounceTimer, setBoundsDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Default fallback location (London, UK)
   const fallbackCenter = { lat: 51.5074, lng: -0.1278 };
@@ -83,11 +73,18 @@ export function GoogleMapView({ locations, onMarkerClick, onBoundsChange }: Goog
           gestureHandling="greedy"
           disableDefaultUI={false}
           style={{ width: '100%', height: '100%' }}
-          onBoundsChanged={(event) => {
-            const map = event.map;
-            const bounds = map.getBounds();
-            if (bounds) {
-              setMapBounds(bounds);
+          onIdle={(event) => {
+            // Use onIdle instead of onBoundsChanged to prevent flashing
+            // onIdle fires after the map has finished moving/zooming
+            if (onBoundsChange) {
+              const map = event.map;
+              const bounds = map.getBounds();
+              if (bounds) {
+                const visibleIds = locations
+                  .filter(loc => bounds.contains(new google.maps.LatLng(loc.position.lat, loc.position.lng)))
+                  .map(loc => loc.id);
+                onBoundsChange(visibleIds);
+              }
             }
           }}
         >
