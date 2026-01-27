@@ -16,12 +16,24 @@ interface Location {
 interface GoogleMapViewProps {
   locations: Location[];
   onMarkerClick: (id: string) => void;
+  onBoundsChange?: (visibleIds: string[]) => void;
 }
 
-export function GoogleMapView({ locations, onMarkerClick }: GoogleMapViewProps) {
+export function GoogleMapView({ locations, onMarkerClick, onBoundsChange }: GoogleMapViewProps) {
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+  const [mapBounds, setMapBounds] = useState<google.maps.LatLngBounds | null>(null);
+
+  // Filter locations within current map bounds
+  useEffect(() => {
+    if (mapBounds && onBoundsChange) {
+      const visibleIds = locations
+        .filter(loc => mapBounds.contains(new google.maps.LatLng(loc.position.lat, loc.position.lng)))
+        .map(loc => loc.id);
+      onBoundsChange(visibleIds);
+    }
+  }, [mapBounds, locations, onBoundsChange]);
 
   // Default fallback location (London, UK)
   const fallbackCenter = { lat: 51.5074, lng: -0.1278 };
@@ -71,6 +83,13 @@ export function GoogleMapView({ locations, onMarkerClick }: GoogleMapViewProps) 
           gestureHandling="greedy"
           disableDefaultUI={false}
           style={{ width: '100%', height: '100%' }}
+          onBoundsChanged={(event) => {
+            const map = event.map;
+            const bounds = map.getBounds();
+            if (bounds) {
+              setMapBounds(bounds);
+            }
+          }}
         >
           {/* User's current location marker */}
           {userLocation && (
@@ -92,10 +111,29 @@ export function GoogleMapView({ locations, onMarkerClick }: GoogleMapViewProps) 
                 onMarkerClick(location.id);
               }}
             >
-              <div className="relative flex items-center justify-center">
-                <div className="w-10 h-10 bg-[#2E7D32] rounded-full flex items-center justify-center shadow-lg border-2 border-white cursor-pointer hover:scale-110 transition-transform">
-                  <MapPin className="w-6 h-6 text-white" fill="white" />
-                </div>
+              <div className="relative flex items-center justify-center cursor-pointer hover:scale-110 transition-transform">
+                {location.thumbnail ? (
+                  <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg border-2 border-white bg-white">
+                    <img
+                      src={location.thumbnail}
+                      alt={location.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to pin icon if image fails to load
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.parentElement!.innerHTML = `
+                          <div class="w-10 h-10 bg-[#2E7D32] rounded-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                          </div>
+                        `;
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 bg-[#2E7D32] rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                    <MapPin className="w-6 h-6 text-white" fill="white" />
+                  </div>
+                )}
               </div>
             </AdvancedMarker>
           ))}

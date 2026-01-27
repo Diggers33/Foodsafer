@@ -29,8 +29,15 @@ function parseCoordinate(value: any): number | null {
 }
 
 function mapCompany(c: any): NetworkItem {
-  const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
-  const address = c.address || c.city || c.country || '';
+  // Debug: log to see available fields
+  console.log('Company item:', c);
+
+  // Try multiple fields for the logo/image
+  const logoField = c.logo || c.image || c.thumbnail || c.avatar || c.picture ||
+                    c.file?.url || c.file?.rawLink || '';
+  const logo = logoField ? (logoField.startsWith('http') ? logoField : `${API_BASE}${logoField}`) : '';
+
+  const address = c.address || c.city || c.country || c.location || '';
 
   // Parse coordinates safely - allow 0 as valid value
   const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
@@ -55,6 +62,7 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   const [showConnections, setShowConnections] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [companies, setCompanies] = useState<NetworkItem[]>([]);
+  const [visibleCompanyIds, setVisibleCompanyIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,8 +163,10 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           <GoogleMapView
             locations={mapLocations}
             onMarkerClick={(id) => {
-              // Optional: Auto-scroll to the item in the bottom sheet
-              console.log('Marker clicked:', id);
+              setSelectedOrg(id);
+            }}
+            onBoundsChange={(visibleIds) => {
+              setVisibleCompanyIds(visibleIds);
             }}
           />
 
@@ -164,24 +174,36 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           <div className="bg-white rounded-t-2xl shadow-lg -mt-6 relative z-10">
             <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3"></div>
             <div className="px-4 pb-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3>{companies.length} items in this area</h3>
-              </div>
-              {isLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
-                </div>
-              ) : error ? (
-                <p className="text-red-600 text-sm text-center py-4">{error}</p>
-              ) : companies.length === 0 ? (
-                <p className="text-[#757575] text-center py-4">No organizations found</p>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {companies.map((item) => (
-                    <NetworkItemCard key={item.id} item={item} compact onSelect={() => setSelectedOrg(item.id)} />
-                  ))}
-                </div>
-              )}
+              {(() => {
+                // Filter to show only companies visible in current map view
+                const visibleCompanies = visibleCompanyIds.length > 0
+                  ? companies.filter(c => visibleCompanyIds.includes(c.id))
+                  : companies;
+                const itemCount = visibleCompanies.length;
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3>{itemCount} {itemCount === 1 ? 'item' : 'items'} in this area</h3>
+                    </div>
+                    {isLoading ? (
+                      <div className="flex justify-center py-4">
+                        <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
+                      </div>
+                    ) : error ? (
+                      <p className="text-red-600 text-sm text-center py-4">{error}</p>
+                    ) : itemCount === 0 ? (
+                      <p className="text-[#757575] text-center py-4">No organizations in this area. Try zooming out.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {visibleCompanies.map((item) => (
+                          <NetworkItemCard key={item.id} item={item} compact onSelect={() => setSelectedOrg(item.id)} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -220,7 +242,13 @@ function NetworkItemCard({ item, compact = false, onSelect }: { item: NetworkIte
   return (
     <article onClick={onSelect} className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3 cursor-pointer hover:shadow-md transition-shadow">
       <div className={`${compact ? 'w-16 h-16' : 'w-20 h-20'} rounded-lg overflow-hidden flex-shrink-0 bg-gray-100`}>
-        <img src={item.thumbnail} alt={item.name} className="w-full h-full object-cover" />
+        {item.thumbnail ? (
+          <img src={item.thumbnail} alt={item.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-lg font-semibold">
+            {item.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h4 className="line-clamp-1 mb-1">{item.name}</h4>
