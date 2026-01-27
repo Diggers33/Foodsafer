@@ -80,20 +80,25 @@ async function request<T>(
     headers,
   });
 
-  // Handle token refresh on 401 (only for authenticated requests)
-  if (response.status === 401 && !skipAuth && getRefreshToken()) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      // Retry the original request with new token
-      const newAccessToken = getAccessToken();
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
-      const retryResponse = await fetch(url, { ...fetchOptions, headers });
-      return parseResponse<T>(retryResponse);
-    } else {
-      // Refresh failed, clear tokens
-      clearTokens();
-      throw new ApiError('Session expired. Please login again.', 401);
+  // Handle 401 Unauthorized (only for authenticated requests)
+  if (response.status === 401 && !skipAuth) {
+    const refreshToken = getRefreshToken();
+
+    if (refreshToken) {
+      // Try to refresh the token
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        // Retry the original request with new token
+        const newAccessToken = getAccessToken();
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
+        const retryResponse = await fetch(url, { ...fetchOptions, headers });
+        return parseResponse<T>(retryResponse);
+      }
     }
+
+    // No refresh token or refresh failed - clear tokens and redirect to login
+    clearTokens();
+    throw new ApiError('Session expired. Please login again.', 401);
   }
 
   return parseResponse<T>(response);
