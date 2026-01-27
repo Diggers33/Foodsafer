@@ -2,7 +2,7 @@ import { useApp } from '../App';
 import { Settings, Edit, LogOut, MapPin, FileText, Bookmark, Users, MessageSquare, ArrowLeft } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Button } from './ui/button';
-import logoImage from 'figma:asset/ad1500f1c0a7d330374c8347ab5c29fbc9f7deb9.png';
+import logoImage from '@/assets/ad1500f1c0a7d330374c8347ab5c29fbc9f7deb9.png';
 
 export function UserProfile({ onBack }: { onBack?: () => void }) {
   const { currentUser, setIsAuthenticated } = useApp();
