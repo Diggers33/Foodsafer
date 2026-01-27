@@ -14,7 +14,7 @@ interface SearchResult {
   verified?: boolean;
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapCompanyToResult(c: any): SearchResult {
   const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';

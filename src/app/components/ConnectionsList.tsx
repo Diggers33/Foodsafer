@@ -15,7 +15,7 @@ interface Connection {
   isConnected: boolean;
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapConnection(u: any, isConnected: boolean = true): Connection {
   const avatar = u.avatar ? (u.avatar.startsWith('http') ? u.avatar : `${API_BASE}${u.avatar}`) : '';

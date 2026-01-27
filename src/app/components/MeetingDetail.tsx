@@ -25,7 +25,7 @@ interface Meeting {
   files: { name: string; size: string }[];
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function formatMeetingDate(dateString: string): string {
   if (!dateString) return '';

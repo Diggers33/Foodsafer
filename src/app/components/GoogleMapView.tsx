@@ -27,25 +27,25 @@ export function GoogleMapView({ locations, onMarkerClick }: GoogleMapViewProps) 
   const fallbackCenter = { lat: 51.5074, lng: -0.1278 };
 
   useEffect(() => {
-    // Get user's current location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
+    // Get user's location from IP address (no permission required)
+    const getLocationFromIP = async () => {
+      try {
+        const response = await fetch('https://ipapi.co/json/');
+        const data = await response.json();
+        if (data.latitude && data.longitude) {
           setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
+            lat: data.latitude,
+            lng: data.longitude,
           });
-          setIsLoadingLocation(false);
-        },
-        (error) => {
-          console.log('Geolocation error:', error.message);
-          setIsLoadingLocation(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
-      );
-    } else {
-      setIsLoadingLocation(false);
-    }
+        }
+      } catch (error) {
+        console.log('IP geolocation failed:', error);
+      } finally {
+        setIsLoadingLocation(false);
+      }
+    };
+
+    getLocationFromIP();
   }, []);
 
   // Use user location if available, otherwise fall back to default

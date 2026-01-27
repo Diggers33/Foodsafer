@@ -16,7 +16,7 @@ interface Tool {
   url: string;
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapTool(t: any): Tool {
   const icon = t.icon || t.image || t.thumbnail;

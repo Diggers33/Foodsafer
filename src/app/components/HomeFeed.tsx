@@ -47,7 +47,7 @@ function toDisplayPost(post: any, currentUserId?: string): DisplayPost {
   const organization = creator.userCompanies?.[0]?.company?.name || creator.organization || '';
 
   // Avatar might be a relative path - use API base URL
-  const API_BASE = 'https://test.foodsafer.com/api';
+  const API_BASE = 'https://my.foodsafer.com:443/api';
   const avatar = creator.avatar ?
     (creator.avatar.startsWith('http') ? creator.avatar : `${API_BASE}${creator.avatar}`)
     : '';

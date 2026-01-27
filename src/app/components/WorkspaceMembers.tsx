@@ -20,7 +20,7 @@ interface Member {
   status?: 'Active' | 'Pending';
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapMember(p: any): Member {
   const user = p.user || p;

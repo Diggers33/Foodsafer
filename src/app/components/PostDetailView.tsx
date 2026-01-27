@@ -49,7 +49,7 @@ interface PostDetailViewProps {
   setPosts: (posts: Post[]) => void;
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 const reactionTypes = [
   { id: 'like', label: 'Like', icon: ThumbsUp, color: '#36B9D0' },

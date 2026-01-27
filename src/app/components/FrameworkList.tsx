@@ -18,7 +18,7 @@ interface Framework {
   featured: boolean;
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function formatDuration(minutes: number): string {
   if (!minutes) return '';

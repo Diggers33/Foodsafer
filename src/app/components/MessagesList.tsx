@@ -19,7 +19,7 @@ interface Conversation {
   unreadCount: number;
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapConversation(c: any): Conversation {
   const participant = c.participant || c.otherUser || c.user || {};

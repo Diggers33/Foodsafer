@@ -37,7 +37,7 @@ interface WorkspaceData {
   };
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 export function WorkspaceDetail({ workspaceId, onBack }: WorkspaceDetailProps) {
   const [activeTab, setActiveTab] = useState('discussions');

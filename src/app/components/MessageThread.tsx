@@ -22,7 +22,7 @@ interface Conversation {
   messages: Message[];
 }
 
-const API_BASE = 'https://test.foodsafer.com/api';
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapConversation(c: any, currentUserId: string): Conversation {
   const participant = c.participant || c.otherUser || c.user || {};

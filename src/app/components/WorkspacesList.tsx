@@ -22,7 +22,7 @@ interface DisplayWorkspace {
 
 // Helper to convert API workspace to display workspace
 function toDisplayWorkspace(workspace: any): DisplayWorkspace {
-  const API_BASE = 'https://test.foodsafer.com/api';
+  const API_BASE = 'https://my.foodsafer.com:443/api';
   const thumbnail = workspace.thumbnail ?
     (workspace.thumbnail.startsWith('http') ? workspace.thumbnail : `${API_BASE}${workspace.thumbnail}`)
     : '';
