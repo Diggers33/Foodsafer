@@ -29,9 +29,6 @@ function parseCoordinate(value: any): number | null {
 }
 
 function mapCompany(c: any): NetworkItem {
-  // Debug: log to see available fields
-  console.log('Company item:', c);
-
   // Try multiple fields for the logo/image
   const logoField = c.logo || c.image || c.thumbnail || c.avatar || c.picture ||
                     c.file?.url || c.file?.rawLink || '';
@@ -76,7 +73,13 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
     try {
       const data = await api.get<any[]>('/queries/companies');
       const companiesArray = Array.isArray(data) ? data : [];
-      setCompanies(companiesArray.map(mapCompany));
+      const mapped = companiesArray.map(mapCompany);
+      const withCoords = mapped.filter(c => isFinite(c.lat) && isFinite(c.lng));
+      console.log(`Companies: ${mapped.length} total, ${withCoords.length} with valid coordinates`);
+      if (withCoords.length > 0) {
+        console.log('Sample coordinates:', withCoords.slice(0, 3).map(c => ({ name: c.name, lat: c.lat, lng: c.lng })));
+      }
+      setCompanies(mapped);
     } catch (err) {
       console.error('Failed to load companies:', err);
       setError(err instanceof Error ? err.message : 'Failed to load companies');

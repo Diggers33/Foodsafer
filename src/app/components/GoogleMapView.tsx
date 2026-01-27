@@ -80,9 +80,12 @@ export function GoogleMapView({ locations, onMarkerClick, onBoundsChange }: Goog
               const map = event.map;
               const bounds = map.getBounds();
               if (bounds) {
+                const ne = bounds.getNorthEast();
+                const sw = bounds.getSouthWest();
                 const visibleIds = locations
                   .filter(loc => bounds.contains(new google.maps.LatLng(loc.position.lat, loc.position.lng)))
                   .map(loc => loc.id);
+                console.log(`Map bounds: NE(${ne.lat().toFixed(2)}, ${ne.lng().toFixed(2)}) SW(${sw.lat().toFixed(2)}, ${sw.lng().toFixed(2)}), visible: ${visibleIds.length}/${locations.length}`);
                 onBoundsChange(visibleIds);
               }
             }
