@@ -1,4 +1,4 @@
-import { useState, createContext, useContext } from 'react';
+import { useState, createContext, useContext, useEffect, useCallback } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { HomeFeed } from './components/HomeFeed';
 import { WorkspacesList } from './components/WorkspacesList';
@@ -6,40 +6,70 @@ import { ResourcesHub } from './components/ResourcesHub';
 import { NetworkMap } from './components/NetworkMap';
 import { UserProfile } from './components/UserProfile';
 import { BottomNav } from './components/BottomNav';
+import { User, authService, getAccessToken, clearTokens } from '@/api';
+import { Loader2 } from 'lucide-react';
 
 // App context for managing auth state
 interface AppContextType {
   isAuthenticated: boolean;
-  setIsAuthenticated: (value: boolean) => void;
-  currentUser: {
-    id: string;
-    name: string;
-    email: string;
-    organization: string;
-    avatar: string;
-  } | null;
+  currentUser: User | null;
+  isLoading: boolean;
+  login: (user: User) => void;
+  logout: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType>({
   isAuthenticated: false,
-  setIsAuthenticated: () => {},
   currentUser: null,
+  isLoading: true,
+  login: () => {},
+  logout: async () => {},
 });
 
 export const useApp = () => useContext(AppContext);
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const [previousTab, setPreviousTab] = useState('home');
 
-  const currentUser = {
-    id: '1',
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@foodsafer.com',
-    organization: 'FoodSafe Global',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-  };
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = getAccessToken();
+      if (token) {
+        try {
+          const user = await authService.getCurrentUser();
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+        } catch {
+          // Token is invalid or expired, clear it
+          clearTokens();
+        }
+      }
+      setIsLoading(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  const login = useCallback((user: User) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // Even if logout fails on server, clear local state
+    }
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setActiveTab('home');
+  }, []);
 
   const handleProfileClick = () => {
     setPreviousTab(activeTab);
@@ -67,9 +97,18 @@ export default function App() {
     }
   };
 
+  // Show loading screen while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
-      <AppContext.Provider value={{ isAuthenticated, setIsAuthenticated, currentUser: null }}>
+      <AppContext.Provider value={{ isAuthenticated, currentUser, isLoading, login, logout }}>
         <div className="min-h-screen bg-white">
           <LoginScreen />
         </div>
@@ -78,7 +117,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ isAuthenticated, setIsAuthenticated, currentUser }}>
+    <AppContext.Provider value={{ isAuthenticated, currentUser, isLoading, login, logout }}>
       <div className={`min-h-screen bg-[#F5F5F5] ${activeTab !== 'profile' ? 'pb-20' : ''}`}>
         {renderScreen()}
         {activeTab !== 'profile' && (

@@ -1,13 +1,17 @@
 import { useApp } from '../App';
-import { Settings, Edit, LogOut, MapPin, FileText, Bookmark, Users, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Settings, Edit, LogOut, MapPin, FileText, Bookmark, Users, MessageSquare, ArrowLeft, Loader2 } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Button } from './ui/button';
-import logoImage from '@/assets/ad1500f1c0a7d330374c8347ab5c29fbc9f7deb9.png';
+import { useState } from 'react';
 
 export function UserProfile({ onBack }: { onBack?: () => void }) {
-  const { currentUser, setIsAuthenticated } = useApp();
+  const { currentUser, logout } = useApp();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   if (!currentUser) return null;
+
+  // Compute display name from firstName and lastName
+  const displayName = `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
   const stats = [
     { label: 'Posts', value: 28 },
@@ -25,6 +29,15 @@ export function UserProfile({ onBack }: { onBack?: () => void }) {
     { icon: Settings, label: 'Privacy Settings', action: () => {} },
     { icon: MessageSquare, label: 'Help & Support', action: () => {} },
   ];
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -49,7 +62,13 @@ export function UserProfile({ onBack }: { onBack?: () => void }) {
           {/* Avatar */}
           <div className="relative mb-4">
             <Avatar className="w-24 h-24">
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+              {currentUser.avatar ? (
+                <img src={currentUser.avatar} alt={displayName} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-2xl font-semibold">
+                  {currentUser.firstName?.[0]}{currentUser.lastName?.[0]}
+                </div>
+              )}
             </Avatar>
             <button className="absolute bottom-0 right-0 w-8 h-8 bg-[#2E7D32] rounded-full flex items-center justify-center shadow-lg">
               <Edit className="w-4 h-4 text-white" />
@@ -57,29 +76,31 @@ export function UserProfile({ onBack }: { onBack?: () => void }) {
           </div>
 
           {/* User Info */}
-          <h2 className="mb-1">{currentUser.name}</h2>
-          <p className="text-[#757575] mb-1">{currentUser.organization}</p>
+          <h2 className="mb-1">{displayName}</h2>
+          <p className="text-[#757575] mb-1">{currentUser.organization || 'No organization'}</p>
           <div className="flex items-center gap-1 text-sm text-[#757575] mb-4">
             <MapPin className="w-4 h-4" />
-            <span>San Francisco, CA</span>
+            <span>{currentUser.location || 'Location not set'}</span>
           </div>
 
           {/* Bio */}
           <p className="text-sm text-[#212121] max-w-md mb-4">
-            Food Safety Professional | HACCP Certified | Passionate about advancing food safety standards globally
+            {currentUser.bio || 'No bio available'}
           </p>
 
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2 justify-center mb-4">
-            {['HACCP', 'Quality Control', 'Food Safety'].map((tag) => (
-              <span
-                key={tag}
-                className="px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-full text-xs"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+          {/* Tags/Skills */}
+          {currentUser.skills && currentUser.skills.length > 0 && (
+            <div className="flex flex-wrap gap-2 justify-center mb-4">
+              {currentUser.skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-full text-xs"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Stats */}
           <div className="flex items-center gap-8 pt-4 border-t border-gray-200 w-full justify-center">
@@ -145,12 +166,22 @@ export function UserProfile({ onBack }: { onBack?: () => void }) {
       {/* Logout Button */}
       <div className="px-4 pb-6">
         <Button
-          onClick={() => setIsAuthenticated(false)}
+          onClick={handleLogout}
           variant="outline"
           className="w-full h-12 border-[#D32F2F] text-[#D32F2F] hover:bg-red-50"
+          disabled={isLoggingOut}
         >
-          <LogOut className="w-5 h-5 mr-2" />
-          Logout
+          {isLoggingOut ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Logging out...
+            </>
+          ) : (
+            <>
+              <LogOut className="w-5 h-5 mr-2" />
+              Logout
+            </>
+          )}
         </Button>
       </div>
 

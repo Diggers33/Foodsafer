@@ -1,14 +1,16 @@
-import { useState } from 'react';
-import { Plus, Heart, MessageCircle, Share2, Bookmark, X, Send, ArrowLeft, Image as ImageIcon, FileText, BarChart3, Smile, AtSign, Hash, Globe, Users, Lock, ChevronDown, MoreHorizontal, Edit2, Trash2, Flag, Copy, BellOff, UserX, ExternalLink, ThumbsUp, ThumbsDown, CheckCircle, Lightbulb, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, MessageCircle, Share2, Bookmark, MoreHorizontal, Edit2, Trash2, ThumbsUp, ThumbsDown, CheckCircle, Lightbulb, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
-import { ImageWithFallback } from '@/app/components/figma/ImageWithFallback';
 import { LinkedInStylePost } from './LinkedInStylePost';
 import { PostDetailView } from './PostDetailView';
 import { AppHeader } from './AppHeader';
+import { postsService, Post as ApiPost } from '@/api';
+import { useApp } from '../App';
 
-interface Post {
+// Local Post type for display (adapts API type)
+interface DisplayPost {
   id: string;
   author: {
     name: string;
@@ -24,60 +26,8 @@ interface Post {
   tags: string[];
   reactions: number;
   comments: number;
+  isOwner: boolean;
 }
-
-const mockPosts: Post[] = [
-  {
-    id: '1',
-    author: {
-      name: 'Dr. Maria Rodriguez',
-      organization: 'Global Food Standards',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop',
-    },
-    timestamp: '2h ago',
-    title: 'New HACCP Guidelines Released for 2026',
-    content: 'The international food safety committee has just released updated HACCP guidelines. Key changes include enhanced monitoring protocols for allergen management and new digital traceability requirements...',
-    image: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=800&h=400&fit=crop',
-    tags: ['HACCP', 'Guidelines', 'Food Safety'],
-    reactions: 47,
-    comments: 12,
-  },
-  {
-    id: '2',
-    author: {
-      name: 'James Chen',
-      organization: 'SafeFood Consulting',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-    },
-    timestamp: '5h ago',
-    title: 'Successful Food Safety Audit at Three Facilities',
-    content: 'Proud to share that our team completed comprehensive audits across three production facilities this week. All sites achieved excellent scores and implemented our new digital checklist system. Swipe through to see our team in action! 📋✅',
-    images: [
-      'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=800&h=400&fit=crop',
-      'https://images.unsplash.com/photo-1581093458791-9d42e55b2b7d?w=800&h=400&fit=crop',
-      'https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?w=800&h=400&fit=crop',
-      'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=800&h=400&fit=crop',
-    ],
-    tags: ['Audit', 'Team', 'Success'],
-    reactions: 156,
-    comments: 34,
-  },
-  {
-    id: '3',
-    author: {
-      name: 'Sarah Williams',
-      organization: 'FoodTech Innovations',
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop',
-    },
-    timestamp: '1d ago',
-    title: 'AI in Food Safety: Game Changer or Hype?',
-    content: 'We\'ve been testing AI-powered inspection systems for the past 6 months. The results are fascinating, but there are important considerations before implementation...',
-    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&h=400&fit=crop',
-    tags: ['Technology', 'AI', 'Innovation'],
-    reactions: 134,
-    comments: 56,
-  },
-];
 
 const reactionTypes = [
   { id: 'like', label: 'Like', icon: ThumbsUp, color: '#36B9D0' },
@@ -87,50 +37,115 @@ const reactionTypes = [
   { id: 'inappropriate', label: 'Inappropriate', icon: AlertTriangle, color: '#D32F2F' },
 ];
 
+// Helper to convert API post to display post
+function toDisplayPost(post: ApiPost, currentUserId?: string): DisplayPost {
+  const authorName = `${post.author.firstName} ${post.author.lastName}`.trim();
+  return {
+    id: post.id,
+    author: {
+      name: authorName,
+      organization: post.author.organization || '',
+      avatar: post.author.avatar || '',
+    },
+    timestamp: formatTimestamp(post.createdAt),
+    title: post.title,
+    content: post.content,
+    image: post.images?.[0],
+    images: post.images,
+    documents: post.documents,
+    tags: post.tags,
+    reactions: post.reactionCount,
+    comments: post.commentCount,
+    isOwner: post.author.id === currentUserId,
+  };
+}
+
+function formatTimestamp(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
 export function HomeFeed({ onProfileClick }: { onProfileClick: () => void }) {
+  const { currentUser } = useApp();
   const [notificationCount] = useState(3);
   const [showCreatePost, setShowCreatePost] = useState(false);
-  const [posts, setPosts] = useState<Post[]>(mockPosts);
+  const [posts, setPosts] = useState<DisplayPost[]>([]);
   const [viewingPost, setViewingPost] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleCreatePost = (postData: any) => {
-    const newPost: Post = {
-      id: Date.now().toString(),
-      author: {
-        name: 'You',
-        organization: 'Your Organization',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-      },
-      timestamp: 'Just now',
-      title: postData.content.split('\n')[0].slice(0, 100) || 'Untitled Post',
-      content: postData.content,
-      image: postData.images[0],
-      images: postData.images,
-      documents: postData.documents,
-      tags: postData.tags,
-      reactions: 0,
-      comments: 0,
-    };
+  // Fetch posts on mount
+  useEffect(() => {
+    fetchPosts();
+  }, []);
 
-    setPosts([newPost, ...posts]);
-    
-    // Clear draft after successful post
-    localStorage.removeItem('foodsafer_post_draft');
-    
-    setShowCreatePost(false);
+  const fetchPosts = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await postsService.getAll();
+      const displayPosts = response.data.map((post) => toDisplayPost(post, currentUser?.id));
+      setPosts(displayPosts);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load posts');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const toggleReaction = (postId: string) => {
-    setPosts(posts.map(p => {
-      if (p.id === postId) {
-        return { ...p, reactions: p.reactions + 1 };
-      }
-      return p;
-    }));
+  const handleCreatePost = async (postData: { content: string; images: string[]; documents: string[]; tags: string[]; visibility: string }) => {
+    try {
+      const newPost = await postsService.create({
+        title: postData.content.split('\n')[0].slice(0, 100) || 'Untitled Post',
+        content: postData.content,
+        images: postData.images,
+        documents: postData.documents,
+        tags: postData.tags,
+        visibility: postData.visibility as 'public' | 'private' | 'workspace',
+      });
+
+      const displayPost = toDisplayPost(newPost, currentUser?.id);
+      setPosts([displayPost, ...posts]);
+
+      // Clear draft after successful post
+      localStorage.removeItem('foodsafer_post_draft');
+      setShowCreatePost(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create post');
+    }
   };
 
-  const handleDeletePost = (postId: string) => {
-    setPosts(posts.filter(p => p.id !== postId));
+  const toggleReaction = async (postId: string, reactionType: string) => {
+    try {
+      await postsService.react(postId, reactionType as 'like' | 'not-relevant' | 'recommend' | 'insightful' | 'inappropriate');
+      setPosts(posts.map(p => {
+        if (p.id === postId) {
+          return { ...p, reactions: p.reactions + 1 };
+        }
+        return p;
+      }));
+    } catch (err) {
+      console.error('Failed to react to post:', err);
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    try {
+      await postsService.delete(postId);
+      setPosts(posts.filter(p => p.id !== postId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete post');
+    }
   };
 
   // Post Detail View with Comments
@@ -150,13 +165,39 @@ export function HomeFeed({ onProfileClick }: { onProfileClick: () => void }) {
 
       {/* Feed */}
       <div className="px-4 py-4 space-y-4">
-        {posts.map((post) => (
-          <PostCard key={post.id} post={post} toggleReaction={toggleReaction} setViewingPost={setViewingPost} handleDeletePost={handleDeletePost} />
-        ))}
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={fetchPosts} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-[#757575] mb-4">No posts yet. Be the first to share!</p>
+            <Button onClick={() => setShowCreatePost(true)} className="bg-[#2E7D32]">
+              Create Post
+            </Button>
+          </div>
+        ) : (
+          posts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              toggleReaction={toggleReaction}
+              setViewingPost={setViewingPost}
+              handleDeletePost={handleDeletePost}
+            />
+          ))
+        )}
       </div>
 
       {/* Floating Action Button */}
-      <button 
+      <button
         onClick={() => setShowCreatePost(true)}
         className="fixed bottom-24 right-6 w-14 h-14 bg-[#2E7D32] hover:bg-[#1B5E20] rounded-full shadow-lg flex items-center justify-center z-40"
       >
@@ -166,7 +207,17 @@ export function HomeFeed({ onProfileClick }: { onProfileClick: () => void }) {
   );
 }
 
-function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { post: Post, toggleReaction: (postId: string) => void, setViewingPost: (postId: string | null) => void, handleDeletePost: (postId: string) => void }) {
+function PostCard({
+  post,
+  toggleReaction,
+  setViewingPost,
+  handleDeletePost,
+}: {
+  post: DisplayPost;
+  toggleReaction: (postId: string, reactionType: string) => void;
+  setViewingPost: (postId: string | null) => void;
+  handleDeletePost: (postId: string) => void;
+}) {
   const [selectedReaction, setSelectedReaction] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -175,10 +226,23 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
   const handleReaction = (reactionType: string) => {
     setSelectedReaction(reactionType);
     setShowReactionPicker(false);
-    toggleReaction(post.id);
+    toggleReaction(post.id, reactionType);
   };
 
-  const ReactionIcon = selectedReaction 
+  const handleSave = async () => {
+    try {
+      if (isSaved) {
+        await postsService.unsave(post.id);
+      } else {
+        await postsService.save(post.id);
+      }
+      setIsSaved(!isSaved);
+    } catch (err) {
+      console.error('Failed to save/unsave post:', err);
+    }
+  };
+
+  const ReactionIcon = selectedReaction
     ? reactionTypes.find(r => r.id === selectedReaction)?.icon || ThumbsUp
     : ThumbsUp;
   const reactionColor = selectedReaction
@@ -190,7 +254,13 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
       {/* Author Info */}
       <div className="flex items-start gap-3 p-4">
         <Avatar className="w-10 h-10">
-          <img src={post.author.avatar} alt={post.author.name} className="w-full h-full object-cover" />
+          {post.author.avatar ? (
+            <img src={post.author.avatar} alt={post.author.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-semibold">
+              {post.author.name.split(' ').map(n => n[0]).join('')}
+            </div>
+          )}
         </Avatar>
         <div className="flex-1 min-w-0">
           <h4 className="truncate">{post.author.name}</h4>
@@ -198,7 +268,7 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
           <p className="text-xs text-[#757575]">{post.timestamp}</p>
         </div>
         {/* Three-dot menu */}
-        {post.author.name === 'You' && (
+        {post.isOwner && (
           <div className="relative">
             <button
               onClick={(e) => {
@@ -246,7 +316,7 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
       </div>
 
       {/* Content - Clickable to open post */}
-      <div 
+      <div
         className="px-4 pb-3 cursor-pointer"
         onClick={() => setViewingPost(post.id)}
       >
@@ -259,7 +329,7 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
 
       {/* Single Image - Clickable to open post */}
       {post.image && !post.images && (
-        <div 
+        <div
           className="w-full cursor-pointer"
           onClick={() => setViewingPost(post.id)}
         >
@@ -269,7 +339,7 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
 
       {/* Multiple Images Grid - Clickable to open post */}
       {post.images && post.images.length > 0 && (
-        <div 
+        <div
           className="w-full cursor-pointer px-4"
           onClick={() => setViewingPost(post.id)}
         >
@@ -364,7 +434,7 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
             )}
           </div>
 
-          <button 
+          <button
             onClick={() => setViewingPost(post.id)}
             className="flex items-center gap-1 text-sm"
           >
@@ -376,10 +446,10 @@ function PostCard({ post, toggleReaction, setViewingPost, handleDeletePost }: { 
           <button onClick={(e) => e.stopPropagation()}>
             <Share2 className="w-5 h-5 text-[#757575]" />
           </button>
-          <button 
+          <button
             onClick={(e) => {
               e.stopPropagation();
-              setIsSaved(!isSaved);
+              handleSave();
             }}
           >
             <Bookmark
