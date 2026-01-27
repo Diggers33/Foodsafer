@@ -51,36 +51,43 @@ interface ApiResponse<T> {
   status: 'OK' | 'KO';
 }
 
+// Request options
+interface RequestOptions extends RequestInit {
+  skipAuth?: boolean;
+}
+
 // Request helper
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
+  const { skipAuth, ...fetchOptions } = options;
   const url = `${API_BASE_URL}${endpoint}`;
   const accessToken = getAccessToken();
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...fetchOptions.headers,
   };
 
-  if (accessToken) {
+  // Only add auth header if we have a token and skipAuth is not set
+  if (accessToken && !skipAuth) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
   }
 
   const response = await fetch(url, {
-    ...options,
+    ...fetchOptions,
     headers,
   });
 
-  // Handle token refresh on 401
-  if (response.status === 401 && getRefreshToken()) {
+  // Handle token refresh on 401 (only for authenticated requests)
+  if (response.status === 401 && !skipAuth && getRefreshToken()) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       // Retry the original request with new token
       const newAccessToken = getAccessToken();
       (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
-      const retryResponse = await fetch(url, { ...options, headers });
+      const retryResponse = await fetch(url, { ...fetchOptions, headers });
       return parseResponse<T>(retryResponse);
     } else {
       // Refresh failed, clear tokens
@@ -169,5 +176,16 @@ export const api = {
 
   delete<T>(endpoint: string): Promise<T> {
     return request<T>(endpoint, { method: 'DELETE' });
+  },
+};
+
+// Public API methods (no auth header, no token refresh)
+export const publicApi = {
+  post<T>(endpoint: string, data?: unknown): Promise<T> {
+    return request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+      skipAuth: true,
+    });
   },
 };
