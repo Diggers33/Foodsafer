@@ -9,12 +9,13 @@ import {
 
 export const workspacesService = {
   // Query endpoints (read operations)
-  async getAll(page = 1, limit = 20): Promise<PaginatedResponse<Workspace>> {
-    return api.get<PaginatedResponse<Workspace>>(`/queries/workspaces?page=${page}&limit=${limit}`);
+  async getAll(): Promise<Workspace[]> {
+    return api.get<Workspace[]>('/queries/workspaces');
   },
 
-  async getMy(page = 1, limit = 20): Promise<PaginatedResponse<Workspace>> {
-    return api.get<PaginatedResponse<Workspace>>(`/queries/workspaces/my?page=${page}&limit=${limit}`);
+  async getMy(): Promise<Workspace[]> {
+    // API uses filterBy=2 for user's workspaces
+    return api.get<Workspace[]>('/queries/workspaces?filterBy=2');
   },
 
   async getById(id: string): Promise<Workspace> {

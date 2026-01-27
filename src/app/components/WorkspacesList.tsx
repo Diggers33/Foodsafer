@@ -21,17 +21,21 @@ interface DisplayWorkspace {
 }
 
 // Helper to convert API workspace to display workspace
-function toDisplayWorkspace(workspace: ApiWorkspace): DisplayWorkspace {
+function toDisplayWorkspace(workspace: any): DisplayWorkspace {
+  const API_BASE = 'https://test.foodsafer.com/api';
+  const thumbnail = workspace.thumbnail ?
+    (workspace.thumbnail.startsWith('http') ? workspace.thumbnail : `${API_BASE}${workspace.thumbnail}`)
+    : '';
+
   return {
     id: workspace.id,
-    name: workspace.name,
-    description: workspace.description,
-    thumbnail: workspace.thumbnail || '',
-    memberCount: workspace.memberCount,
-    isPublic: workspace.isPublic,
-    // TODO: userRole and hasUnread should come from API
-    userRole: undefined,
-    hasUnread: false,
+    name: workspace.name || 'Untitled',
+    description: workspace.description || '',
+    thumbnail,
+    memberCount: workspace.memberCount || workspace.numMembers || 0,
+    isPublic: workspace.isPublic ?? true,
+    userRole: workspace.userRole || undefined,
+    hasUnread: workspace.hasUnread || false,
   };
 }
 
@@ -55,7 +59,9 @@ export function WorkspacesList({ onProfileClick }: { onProfileClick: () => void 
       const response = activeTab === 'my'
         ? await workspacesService.getMy()
         : await workspacesService.getAll();
-      const displayWorkspaces = response.data.map(toDisplayWorkspace);
+      // API returns array directly
+      const workspacesArray = Array.isArray(response) ? response : (response as any).data || [];
+      const displayWorkspaces = workspacesArray.map(toDisplayWorkspace);
       setWorkspaces(displayWorkspaces);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workspaces');
