@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Users, Plus, Loader2 } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Loader2, UserPlus, Check, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { api } from '@/api';
+import { api, usersService } from '@/api';
 
 interface Connection {
   id: string;
@@ -37,8 +37,10 @@ function mapConnection(u: any, isConnected: boolean = true): Connection {
 export function ConnectionsList({ onBack }: { onBack: () => void }) {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [suggested, setSuggested] = useState<Connection[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<Connection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchConnections();
@@ -53,6 +55,15 @@ export function ConnectionsList({ onBack }: { onBack: () => void }) {
       const conns = Array.isArray(data) ? data.map(u => mapConnection(u, true)) : [];
       setConnections(conns);
 
+      // Try to fetch pending connection requests
+      try {
+        const pendingData = await usersService.getPendingRequests();
+        const pending = Array.isArray(pendingData) ? pendingData.map(u => mapConnection(u, false)) : [];
+        setPendingRequests(pending);
+      } catch {
+        // Pending requests endpoint may not exist
+      }
+
       // Try to fetch suggested connections
       try {
         const suggestedData = await api.get<any[]>('/queries/users/suggested');
@@ -66,6 +77,45 @@ export function ConnectionsList({ onBack }: { onBack: () => void }) {
       setError(err instanceof Error ? err.message : 'Failed to load connections');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAccept = async (userId: string) => {
+    setProcessingIds(prev => new Set(prev).add(userId));
+    try {
+      await usersService.acceptConnection(userId);
+      // Move from pending to connections
+      const acceptedUser = pendingRequests.find(p => p.id === userId);
+      if (acceptedUser) {
+        setPendingRequests(prev => prev.filter(p => p.id !== userId));
+        setConnections(prev => [...prev, { ...acceptedUser, isConnected: true }]);
+      }
+    } catch (err) {
+      console.error('Failed to accept connection:', err);
+      alert('Failed to accept connection. Please try again.');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleDecline = async (userId: string) => {
+    setProcessingIds(prev => new Set(prev).add(userId));
+    try {
+      await usersService.declineConnection(userId);
+      setPendingRequests(prev => prev.filter(p => p.id !== userId));
+    } catch (err) {
+      console.error('Failed to decline connection:', err);
+      alert('Failed to decline connection. Please try again.');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
     }
   };
 
@@ -99,6 +149,80 @@ export function ConnectionsList({ onBack }: { onBack: () => void }) {
           </div>
         ) : (
           <>
+            {/* Pending Connection Requests */}
+            {pendingRequests.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3>Connection Requests</h3>
+                  <Badge variant="secondary" className="bg-[#FFF3E0] text-[#FF9800]">
+                    {pendingRequests.length}
+                  </Badge>
+                </div>
+                <div className="space-y-3">
+                  {pendingRequests.map((request) => (
+                    <article
+                      key={request.id}
+                      className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-[#FF9800]"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                          {request.avatar ? (
+                            <img
+                              src={request.avatar}
+                              alt={request.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-[#2E7D32] text-white font-semibold">
+                              {request.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="line-clamp-1 mb-0.5">{request.name}</h4>
+                          <p className="text-sm text-[#757575] line-clamp-1 mb-1">{request.role}</p>
+                          <p className="text-xs text-[#757575] line-clamp-1">{request.organization}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-[#2E7D32] hover:bg-[#1B5E20] text-white"
+                          onClick={() => handleAccept(request.id)}
+                          disabled={processingIds.has(request.id)}
+                        >
+                          {processingIds.has(request.id) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4 mr-1" />
+                              Accept
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 border-[#D32F2F] text-[#D32F2F] hover:bg-red-50"
+                          onClick={() => handleDecline(request.id)}
+                          disabled={processingIds.has(request.id)}
+                        >
+                          {processingIds.has(request.id) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <X className="w-4 h-4 mr-1" />
+                              Decline
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* My Connections */}
             <div className="mb-6">
               <h3 className="mb-3">My Connections</h3>

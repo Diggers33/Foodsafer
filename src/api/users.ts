@@ -55,4 +55,16 @@ export const usersService = {
   async disconnect(userId: string): Promise<void> {
     await api.delete(`/users/${userId}/connect`);
   },
+
+  async getPendingRequests(): Promise<any[]> {
+    return api.get<any[]>('/queries/users/connections/pending');
+  },
+
+  async acceptConnection(userId: string): Promise<void> {
+    await api.post(`/commands/users/${userId}/connect/accept`);
+  },
+
+  async declineConnection(userId: string): Promise<void> {
+    await api.post(`/commands/users/${userId}/connect/decline`);
+  },
 };
