@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../App';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -6,6 +6,8 @@ import { Checkbox } from './ui/checkbox';
 import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react';
 import logoImage from '@/assets/ad1500f1c0a7d330374c8347ab5c29fbc9f7deb9.png';
 import { authService } from '@/api';
+
+const API_BASE = 'https://my.foodsafer.com:443/api';
 
 export function LoginScreen() {
   const { login } = useApp();
@@ -44,6 +46,48 @@ export function LoginScreen() {
       alert('Password reset email sent. Please check your inbox.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send reset email.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSSOLogin = (provider: 'google' | 'microsoft' | 'linkedin') => {
+    // Get the current URL to use as callback
+    const callbackUrl = encodeURIComponent(window.location.origin + '/auth/callback');
+    // Redirect to backend OAuth endpoint
+    window.location.href = `${API_BASE}/auth/${provider}?callbackUrl=${callbackUrl}`;
+  };
+
+  // Check for OAuth callback token in URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const ssoError = urlParams.get('error');
+
+    if (ssoError) {
+      setError(decodeURIComponent(ssoError));
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (token) {
+      // Handle SSO callback with token
+      handleSSOCallback(token);
+    }
+  }, []);
+
+  const handleSSOCallback = async (token: string) => {
+    setIsLoading(true);
+    try {
+      // Store the token and fetch user info
+      localStorage.setItem('foodsafer_access_token', token);
+      localStorage.setItem('foodsafer_refresh_token', token);
+      const user = await authService.getCurrentUser();
+      login(user);
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch (err) {
+      setError('Failed to complete login. Please try again.');
+      localStorage.removeItem('foodsafer_access_token');
+      localStorage.removeItem('foodsafer_refresh_token');
     } finally {
       setIsLoading(false);
     }
@@ -161,9 +205,7 @@ export function LoginScreen() {
             type="button"
             className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             disabled={isLoading}
-            onClick={() => {
-              setError('Google login is not configured yet.');
-            }}
+            onClick={() => handleSSOLogin('google')}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -176,9 +218,7 @@ export function LoginScreen() {
             type="button"
             className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             disabled={isLoading}
-            onClick={() => {
-              setError('Microsoft login is not configured yet.');
-            }}
+            onClick={() => handleSSOLogin('microsoft')}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#00A4EF">
               <path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/>
@@ -188,9 +228,7 @@ export function LoginScreen() {
             type="button"
             className="flex items-center justify-center h-12 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             disabled={isLoading}
-            onClick={() => {
-              setError('LinkedIn login is not configured yet.');
-            }}
+            onClick={() => handleSSOLogin('linkedin')}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0A66C2">
               <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
