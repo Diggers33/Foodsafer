@@ -44,8 +44,11 @@ interface OrganizationData {
 const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapOrganization(c: any): OrganizationData {
+  // Logo - used in list view and profile card
   const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
-  const cover = c.coverImage || c.cover || c.logo;
+
+  // Cover/display image - used as banner at top of profile (don't fallback to logo)
+  const cover = c.coverImage || c.cover || c.banner || c.displayImage || c.headerImage || c.image || '';
   const coverUrl = cover ? (cover.startsWith('http') ? cover : `${API_BASE}${cover}`) : '';
 
   const team = (c.members || c.employees || []).slice(0, 5).map((m: any) => {
@@ -67,7 +70,7 @@ function mapOrganization(c: any): OrganizationData {
     location: c.address || c.city || c.country || '',
     distance: '',
     thumbnail: logo,
-    coverImage: coverUrl || logo,
+    coverImage: coverUrl,
     verified: c.verified ?? c.isVerified ?? false,
     rating: c.rating || c.averageRating || 0,
     reviews: c.reviewsCount || c.reviews || 0,
