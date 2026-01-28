@@ -52,8 +52,6 @@ function mapOrganization(c: any): OrganizationData {
   const coverRaw = c.coverImage || c.cover || c.banner || c.displayImage || c.headerImage || c.image || '';
   const coverUrl = coverRaw ? (coverRaw.startsWith('http') ? coverRaw : `${API_BASE}${coverRaw}`) : '';
 
-  console.log('Organization data:', { name: c.name, logo: c.logo, logoRaw, coverRaw, logoUrl: logo, coverUrl });
-
   const team = (c.members || c.employees || []).slice(0, 5).map((m: any) => {
     const user = m.user || m;
     const avatar = user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '';
@@ -209,20 +207,20 @@ export function OrganizationDetail({ orgId, onBack }: { orgId: string; onBack: (
 
       {/* Cover Image */}
       <div className="relative h-40 bg-gradient-to-br from-[#1976D2] to-[#1565C0]">
-        {/* Fallback icon - always present behind the image */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Building2 className="w-16 h-16 text-white/30" />
-        </div>
-        {/* Actual image - overlays the fallback when loaded successfully */}
-        {org.coverImage && (
+        {org.coverImage ? (
           <img
             src={org.coverImage}
             alt={org.name}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="w-full h-full object-cover"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
+              e.currentTarget.parentElement!.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg></div>';
             }}
           />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Building2 className="w-16 h-16 text-white/30" />
+          </div>
         )}
       </div>
 
@@ -230,21 +228,22 @@ export function OrganizationDetail({ orgId, onBack }: { orgId: string; onBack: (
       <div className="px-4 -mt-12 mb-4">
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="flex gap-3 mb-3">
-            <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#1976D2] border-4 border-white shadow-md flex-shrink-0 relative">
-              {/* Fallback icon - always present behind the image */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Building2 className="w-8 h-8 text-white" />
-              </div>
-              {/* Actual image - overlays the fallback when loaded successfully */}
-              {org.thumbnail && (
+            <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#1976D2] border-4 border-white shadow-md flex-shrink-0">
+              {org.thumbnail ? (
                 <img
                   src={org.thumbnail}
                   alt={org.name}
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="w-full h-full object-cover"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement!.classList.add('flex', 'items-center', 'justify-center');
+                    e.currentTarget.parentElement!.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>';
                   }}
                 />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Building2 className="w-8 h-8 text-white" />
+                </div>
               )}
             </div>
             <div className="flex-1 min-w-0 pt-8">

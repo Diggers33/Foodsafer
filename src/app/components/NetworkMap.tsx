@@ -140,8 +140,8 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           const companyCoord = userCompanyId ? companyCoords.get(userCompanyId) : null;
           allPeople.push(mapUser(item, false, companyCoord));
         } else {
-          // It's a company/organization - only use logo field, not image (which is the cover/display image)
-          const logo = item.logo || '';
+          // It's a company/organization - check multiple possible logo field names
+          const logo = item.logo || item.thumbnail || item.avatar || item.icon || '';
           const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
           const lat = parseCoordinate(item.latitude) ?? parseCoordinate(item.lat);
           const lng = parseCoordinate(item.longitude) ?? parseCoordinate(item.lng);
@@ -448,11 +448,27 @@ function NetworkPersonCard({ person, compact = false, onSelect }: { person: Netw
 
   return (
     <article onClick={onSelect} className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3 cursor-pointer hover:shadow-md transition-shadow">
-      <div className={`${compact ? 'w-12 h-12' : 'w-16 h-16'} ${isOrg ? 'rounded-lg' : 'rounded-full'} overflow-hidden flex-shrink-0 bg-gray-100`}>
+      <div className={`${compact ? 'w-12 h-12' : 'w-16 h-16'} ${isOrg ? 'rounded-lg' : 'rounded-full'} overflow-hidden flex-shrink-0 ${isOrg ? 'bg-[#1976D2]' : 'bg-[#2E7D32]'}`}>
         {person.avatar ? (
-          <img src={person.avatar} alt={person.name} className="w-full h-full object-cover" />
+          <img
+            src={person.avatar}
+            alt={person.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Hide failed image to show the fallback background
+              e.currentTarget.style.display = 'none';
+              // Add fallback content
+              const parent = e.currentTarget.parentElement!;
+              parent.classList.add('flex', 'items-center', 'justify-center');
+              if (isOrg) {
+                parent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>';
+              } else {
+                parent.innerHTML = `<span class="text-white text-lg font-semibold">${person.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>`;
+              }
+            }}
+          />
         ) : (
-          <div className={`w-full h-full ${isOrg ? 'bg-[#1976D2]' : 'bg-[#2E7D32]'} flex items-center justify-center text-white text-lg font-semibold`}>
+          <div className="w-full h-full flex items-center justify-center text-white text-lg font-semibold">
             {isOrg ? (
               <Building2 className="w-6 h-6" />
             ) : (
