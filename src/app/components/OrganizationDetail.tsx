@@ -225,7 +225,7 @@ export function OrganizationDetail({ orgId, onBack }: { orgId: string; onBack: (
       </div>
 
       {/* Profile Section */}
-      <div className="px-4 -mt-12 mb-4">
+      <div className="px-4 -mt-12 mb-4 relative z-10">
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="flex gap-3 mb-3">
             <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#1976D2] border-4 border-white shadow-md flex-shrink-0">
