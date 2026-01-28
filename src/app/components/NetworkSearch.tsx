@@ -17,14 +17,18 @@ interface SearchResult {
 const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapCompanyToResult(c: any): SearchResult {
-  const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
+  // Check multiple possible logo field names
+  const logoRaw = c.logo || c.thumbnail || c.avatar || c.icon || '';
+  const logo = logoRaw ? (logoRaw.startsWith('http') ? logoRaw : `${API_BASE}${logoRaw}`) : '';
   const address = c.address || c.city || c.country || '';
+  // Ensure category is always a string
+  const category = String(c.type || c.category || 'Organization');
 
   return {
     id: c.id,
     name: c.name || 'Unknown',
     type: 'organization',
-    category: c.type || c.category || 'Organization',
+    category,
     location: address,
     thumbnail: logo,
     description: c.description || '',
@@ -36,12 +40,14 @@ function mapUserToResult(u: any): SearchResult {
   const avatar = u.avatar ? (u.avatar.startsWith('http') ? u.avatar : `${API_BASE}${u.avatar}`) : '';
   const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Unknown';
   const company = u.userCompanies?.[0]?.company?.name || '';
+  // Ensure category is always a string
+  const category = String(u.jobTitle || u.role || 'Member');
 
   return {
     id: u.id,
     name,
     type: 'person',
-    category: u.jobTitle || u.role || 'Member',
+    category,
     location: u.city || u.country || '',
     thumbnail: avatar,
     description: company,
@@ -113,17 +119,17 @@ export function NetworkSearch({ onBack, onSelect }: { onBack: () => void; onSele
 
     const query = searchQuery.toLowerCase();
     const filtered = initialCompanies.filter(r =>
-      r.name.toLowerCase().includes(query) ||
-      r.category.toLowerCase().includes(query) ||
-      r.location.toLowerCase().includes(query) ||
-      (r.description && r.description.toLowerCase().includes(query))
+      (r.name || '').toLowerCase().includes(query) ||
+      (r.category || '').toLowerCase().includes(query) ||
+      (r.location || '').toLowerCase().includes(query) ||
+      (r.description || '').toLowerCase().includes(query)
     );
     setResults(filtered);
   }, [searchQuery, initialCompanies]);
 
   const filteredResults = results.filter((result) => {
     const matchesCategory = selectedCategory === 'all' ||
-                           result.category.toLowerCase().includes(selectedCategory);
+                           (result.category || '').toLowerCase().includes(selectedCategory);
     return matchesCategory;
   });
 
