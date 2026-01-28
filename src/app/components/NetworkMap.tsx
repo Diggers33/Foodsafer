@@ -140,8 +140,8 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           const companyCoord = userCompanyId ? companyCoords.get(userCompanyId) : null;
           allPeople.push(mapUser(item, false, companyCoord));
         } else {
-          // It's a company/organization
-          const logo = item.logo || item.image || item.thumbnail || item.avatar || '';
+          // It's a company/organization - only use logo field, not image (which is the cover/display image)
+          const logo = item.logo || '';
           const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
           const lat = parseCoordinate(item.latitude) ?? parseCoordinate(item.lat);
           const lng = parseCoordinate(item.longitude) ?? parseCoordinate(item.lng);
