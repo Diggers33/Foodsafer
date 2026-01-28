@@ -6,17 +6,19 @@ import { MessagesList } from './MessagesList';
 import { ConnectionsList } from './ConnectionsList';
 import { NetworkSearch } from './NetworkSearch';
 import { GoogleMapView } from './GoogleMapView';
+import { UserProfileDetail } from './UserProfileDetail';
 import { api } from '@/api';
 
-interface NetworkItem {
+interface NetworkPerson {
   id: string;
   name: string;
-  category: string;
+  role: string;
+  organization: string;
   location: string;
-  distance: string;
-  thumbnail: string;
+  avatar: string;
   lat: number;
   lng: number;
+  isConnected: boolean;
 }
 
 const API_BASE = 'https://my.foodsafer.com:443/api';
@@ -28,101 +30,131 @@ function parseCoordinate(value: any): number | null {
   return num;
 }
 
-function mapCompany(c: any): NetworkItem {
-  // Try multiple fields for the logo/image
-  const logoField = c.logo || c.image || c.thumbnail || c.avatar || c.picture ||
-                    c.file?.url || c.file?.rawLink || '';
-  const logo = logoField ? (logoField.startsWith('http') ? logoField : `${API_BASE}${logoField}`) : '';
+function mapUser(u: any, isConnected: boolean = false): NetworkPerson {
+  const avatar = u.avatar ? (u.avatar.startsWith('http') ? u.avatar : `${API_BASE}${u.avatar}`) : '';
+  const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || 'Unknown';
+  const company = u.userCompanies?.[0]?.company?.name || u.organization || u.company || '';
+  const location = u.city || u.country || u.location || '';
 
-  const address = c.address || c.city || c.country || c.location || '';
-
-  // Parse coordinates safely - allow 0 as valid value
-  const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
-  const lng = parseCoordinate(c.longitude) ?? parseCoordinate(c.lng);
+  // Parse coordinates - users may have lat/lng from their profile or company
+  const lat = parseCoordinate(u.latitude) ?? parseCoordinate(u.lat) ??
+              parseCoordinate(u.userCompanies?.[0]?.company?.latitude);
+  const lng = parseCoordinate(u.longitude) ?? parseCoordinate(u.lng) ??
+              parseCoordinate(u.userCompanies?.[0]?.company?.longitude);
 
   return {
-    id: c.id,
-    name: c.name || 'Unknown Company',
-    category: c.type || c.category || 'Organization',
-    location: address,
-    distance: '',
-    thumbnail: logo,
+    id: u.id,
+    name,
+    role: u.jobTitle || u.role || u.title || '',
+    organization: company,
+    location,
+    avatar,
     lat: lat ?? NaN,
     lng: lng ?? NaN,
+    isConnected,
   };
 }
 
 export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   const [view, setView] = useState<'map' | 'list'>('map');
   const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [showMessages, setShowMessages] = useState(false);
   const [showConnections, setShowConnections] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [companies, setCompanies] = useState<NetworkItem[]>([]);
-  const [visibleCompanyIds, setVisibleCompanyIds] = useState<string[]>([]);
+  const [people, setPeople] = useState<NetworkPerson[]>([]);
+  const [visiblePeopleIds, setVisiblePeopleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchCompanies();
+    fetchPeople();
   }, []);
 
-  const fetchCompanies = async () => {
+  const fetchPeople = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Try multiple endpoints to get all organizations
-      let companiesArray: any[] = [];
+      const allPeople: NetworkPerson[] = [];
+      const seenIds = new Set<string>();
 
-      // Try search endpoint with wildcard first (often returns all)
+      // Fetch connections (people you're connected with)
       try {
-        const searchResponse = await api.get<any>('/queries/companies/search?q=&page=1&limit=500');
-        const searchData = Array.isArray(searchResponse) ? searchResponse : (searchResponse.items || searchResponse.data || searchResponse.results || []);
-        if (searchData.length > 0) {
-          companiesArray = searchData;
-          console.log('Using search endpoint, found:', searchData.length);
-        }
-      } catch (e) {
-        console.log('Search endpoint failed, trying alternatives...');
-      }
-
-      // If search didn't work, try other endpoints
-      if (companiesArray.length <= 1) {
-        const endpoints = [
-          '/queries/companies/all',
-          '/queries/organizations',
-          '/queries/network/organizations',
-          '/queries/companies?page=1&limit=500',
-        ];
-
-        for (const endpoint of endpoints) {
-          try {
-            const response = await api.get<any>(endpoint);
-            const data = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
-            if (data.length > companiesArray.length) {
-              companiesArray = data;
-              console.log(`Using ${endpoint}, found:`, data.length);
-            }
-          } catch (e) {
-            // Endpoint doesn't exist, continue to next
+        const connectionsData = await api.get<any>('/queries/users/connections');
+        const connections = Array.isArray(connectionsData) ? connectionsData : (connectionsData.items || connectionsData.data || []);
+        console.log('Connections found:', connections.length);
+        connections.forEach((u: any) => {
+          if (!seenIds.has(u.id)) {
+            seenIds.add(u.id);
+            allPeople.push(mapUser(u, true));
           }
-        }
+        });
+      } catch (e) {
+        console.log('Connections endpoint failed:', e);
       }
 
-      const mapped = companiesArray.map(mapCompany);
-      const withCoords = mapped.filter(c => isFinite(c.lat) && isFinite(c.lng));
-      console.log(`Companies: ${mapped.length} total, ${withCoords.length} with valid coordinates`);
-      if (withCoords.length > 0) {
-        console.log('Sample coordinates:', withCoords.slice(0, 3).map(c => ({ name: c.name, lat: c.lat, lng: c.lng })));
+      // Fetch suggested people (people you may know)
+      try {
+        const suggestedData = await api.get<any>('/queries/users/suggested');
+        const suggested = Array.isArray(suggestedData) ? suggestedData : (suggestedData.items || suggestedData.data || []);
+        console.log('Suggested people found:', suggested.length);
+        suggested.forEach((u: any) => {
+          if (!seenIds.has(u.id)) {
+            seenIds.add(u.id);
+            allPeople.push(mapUser(u, false));
+          }
+        });
+      } catch (e) {
+        console.log('Suggested endpoint failed:', e);
       }
-      setCompanies(mapped);
+
+      // Try to fetch all network users
+      try {
+        const networkData = await api.get<any>('/queries/users?page=1&limit=500');
+        const users = Array.isArray(networkData) ? networkData : (networkData.items || networkData.data || []);
+        console.log('Network users found:', users.length);
+        users.forEach((u: any) => {
+          if (!seenIds.has(u.id)) {
+            seenIds.add(u.id);
+            allPeople.push(mapUser(u, false));
+          }
+        });
+      } catch (e) {
+        console.log('Users endpoint failed:', e);
+      }
+
+      // Try network-specific endpoint
+      try {
+        const networkMembers = await api.get<any>('/queries/network/members');
+        const members = Array.isArray(networkMembers) ? networkMembers : (networkMembers.items || networkMembers.data || []);
+        console.log('Network members found:', members.length);
+        members.forEach((u: any) => {
+          if (!seenIds.has(u.id)) {
+            seenIds.add(u.id);
+            allPeople.push(mapUser(u, false));
+          }
+        });
+      } catch (e) {
+        // Endpoint may not exist
+      }
+
+      const withCoords = allPeople.filter(p => isFinite(p.lat) && isFinite(p.lng));
+      console.log(`People: ${allPeople.length} total, ${withCoords.length} with valid coordinates`);
+      if (withCoords.length > 0) {
+        console.log('Sample coordinates:', withCoords.slice(0, 3).map(p => ({ name: p.name, lat: p.lat, lng: p.lng })));
+      }
+      setPeople(allPeople);
     } catch (err) {
-      console.error('Failed to load companies:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load companies');
+      console.error('Failed to load people:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load network');
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (selectedUser) {
+    return <UserProfileDetail userId={selectedUser} onBack={() => setSelectedUser(null)} />;
+  }
 
   if (selectedOrg) {
     return <OrganizationDetail orgId={selectedOrg} onBack={() => setSelectedOrg(null)} />;
@@ -144,21 +176,23 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           setShowSearch(false);
           if (type === 'organization') {
             setSelectedOrg(id);
+          } else if (type === 'user') {
+            setSelectedUser(id);
           }
         }}
       />
     );
   }
 
-  // Convert companies to Google Maps location format - only include items with valid coordinates
-  const mapLocations = companies
-    .filter(c => isFinite(c.lat) && isFinite(c.lng))
-    .map(item => ({
-      id: item.id,
-      name: item.name,
-      category: item.category,
-      position: { lat: item.lat, lng: item.lng },
-      thumbnail: item.thumbnail,
+  // Convert people to Google Maps location format - only include items with valid coordinates
+  const mapLocations = people
+    .filter(p => isFinite(p.lat) && isFinite(p.lng))
+    .map(person => ({
+      id: person.id,
+      name: person.name,
+      category: person.organization || person.role,
+      position: { lat: person.lat, lng: person.lng },
+      thumbnail: person.avatar,
     }));
 
   return (
@@ -202,10 +236,10 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           <GoogleMapView
             locations={mapLocations}
             onMarkerClick={(id) => {
-              setSelectedOrg(id);
+              setSelectedUser(id);
             }}
             onBoundsChange={(visibleIds) => {
-              setVisibleCompanyIds(visibleIds);
+              setVisiblePeopleIds(visibleIds);
             }}
           />
 
@@ -214,18 +248,18 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3"></div>
             <div className="px-4 pb-4">
               {(() => {
-                // Filter to show only companies visible in current map view
-                // If no bounds calculated yet, show all companies with valid coords
-                const companiesWithCoords = companies.filter(c => isFinite(c.lat) && isFinite(c.lng));
-                const visibleCompanies = visibleCompanyIds.length > 0
-                  ? companiesWithCoords.filter(c => visibleCompanyIds.includes(c.id))
-                  : companiesWithCoords;
-                const itemCount = visibleCompanies.length;
+                // Filter to show only people visible in current map view
+                // If no bounds calculated yet, show all people with valid coords
+                const peopleWithCoords = people.filter(p => isFinite(p.lat) && isFinite(p.lng));
+                const visiblePeople = visiblePeopleIds.length > 0
+                  ? peopleWithCoords.filter(p => visiblePeopleIds.includes(p.id))
+                  : peopleWithCoords;
+                const itemCount = visiblePeople.length;
 
                 return (
                   <>
                     <div className="flex items-center justify-between mb-3">
-                      <h3>{itemCount} {itemCount === 1 ? 'item' : 'items'} in this area</h3>
+                      <h3>{itemCount} {itemCount === 1 ? 'person' : 'people'} in this area</h3>
                     </div>
                     {isLoading ? (
                       <div className="flex justify-center py-4">
@@ -234,11 +268,11 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
                     ) : error ? (
                       <p className="text-red-600 text-sm text-center py-4">{error}</p>
                     ) : itemCount === 0 ? (
-                      <p className="text-[#757575] text-center py-4">No organizations in this area. Try zooming out.</p>
+                      <p className="text-[#757575] text-center py-4">No people in this area. Try zooming out.</p>
                     ) : (
                       <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {visibleCompanies.map((item) => (
-                          <NetworkItemCard key={item.id} item={item} compact onSelect={() => setSelectedOrg(item.id)} />
+                        {visiblePeople.map((person) => (
+                          <NetworkPersonCard key={person.id} person={person} compact onSelect={() => setSelectedUser(person.id)} />
                         ))}
                       </div>
                     )}
@@ -259,16 +293,16 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             </div>
           ) : error ? (
             <p className="text-red-600 text-sm text-center py-8">{error}</p>
-          ) : companies.length === 0 ? (
-            <p className="text-[#757575] text-center py-8">No organizations found</p>
+          ) : people.length === 0 ? (
+            <p className="text-[#757575] text-center py-8">No people found in network</p>
           ) : (
             <>
               <div className="mb-3 text-sm text-[#757575]">
-                {companies.length} organizations
+                {people.length} people in network
               </div>
               <div className="space-y-3">
-                {companies.map((item) => (
-                  <NetworkItemCard key={item.id} item={item} onSelect={() => setSelectedOrg(item.id)} />
+                {people.map((person) => (
+                  <NetworkPersonCard key={person.id} person={person} onSelect={() => setSelectedUser(person.id)} />
                 ))}
               </div>
             </>
@@ -279,29 +313,33 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   );
 }
 
-function NetworkItemCard({ item, compact = false, onSelect }: { item: NetworkItem; compact?: boolean; onSelect: () => void }) {
+function NetworkPersonCard({ person, compact = false, onSelect }: { person: NetworkPerson; compact?: boolean; onSelect: () => void }) {
   return (
     <article onClick={onSelect} className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3 cursor-pointer hover:shadow-md transition-shadow">
-      <div className={`${compact ? 'w-16 h-16' : 'w-20 h-20'} rounded-lg overflow-hidden flex-shrink-0 bg-gray-100`}>
-        {item.thumbnail ? (
-          <img src={item.thumbnail} alt={item.name} className="w-full h-full object-cover" />
+      <div className={`${compact ? 'w-12 h-12' : 'w-16 h-16'} rounded-full overflow-hidden flex-shrink-0 bg-gray-100`}>
+        {person.avatar ? (
+          <img src={person.avatar} alt={person.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-lg font-semibold">
-            {item.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            {person.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
           </div>
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <h4 className="line-clamp-1 mb-1">{item.name}</h4>
-        <p className="text-sm text-[#757575] mb-1">{item.category}</p>
-        <div className="flex items-center gap-3 text-xs text-[#757575]">
-          <div className="flex items-center gap-1">
-            <MapPin className="w-3 h-3" />
-            <span>{item.location}</span>
-          </div>
-          <span>•</span>
-          <span>{item.distance}</span>
+        <div className="flex items-center gap-2 mb-1">
+          <h4 className="line-clamp-1">{person.name}</h4>
+          {person.isConnected && (
+            <span className="text-xs bg-[#E8F5E9] text-[#2E7D32] px-2 py-0.5 rounded-full">Connected</span>
+          )}
         </div>
+        {person.role && <p className="text-sm text-[#757575] line-clamp-1">{person.role}</p>}
+        {person.organization && <p className="text-xs text-[#757575] line-clamp-1">{person.organization}</p>}
+        {person.location && (
+          <div className="flex items-center gap-1 text-xs text-[#757575] mt-1">
+            <MapPin className="w-3 h-3" />
+            <span>{person.location}</span>
+          </div>
+        )}
       </div>
     </article>
   );
