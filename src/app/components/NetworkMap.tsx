@@ -78,74 +78,88 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       const allPeople: NetworkPerson[] = [];
       const seenIds = new Set<string>();
 
-      // Fetch connections (people you're connected with)
+      // Try to fetch companies and convert them to "people" entries (organization contacts)
       try {
-        const connectionsData = await api.get<any>('/queries/users/connections');
-        const connections = Array.isArray(connectionsData) ? connectionsData : (connectionsData.items || connectionsData.data || []);
-        console.log('Connections found:', connections.length);
-        connections.forEach((u: any) => {
-          if (!seenIds.has(u.id)) {
-            seenIds.add(u.id);
-            allPeople.push(mapUser(u, true));
+        const searchResponse = await api.get<any>('/queries/companies/search?q=&page=1&limit=500');
+        const companies = Array.isArray(searchResponse) ? searchResponse : (searchResponse.items || searchResponse.data || searchResponse.results || []);
+        console.log('Companies found:', companies.length);
+
+        companies.forEach((c: any) => {
+          if (!seenIds.has(c.id)) {
+            seenIds.add(c.id);
+            // Map company as a network contact
+            const logo = c.logo || c.image || c.thumbnail || c.avatar || '';
+            const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
+            const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
+            const lng = parseCoordinate(c.longitude) ?? parseCoordinate(c.lng);
+
+            allPeople.push({
+              id: c.id,
+              name: c.name || 'Unknown Organization',
+              role: c.type || c.category || 'Organization',
+              organization: '',
+              location: c.address || c.city || c.country || '',
+              avatar: logoUrl,
+              lat: lat ?? NaN,
+              lng: lng ?? NaN,
+              isConnected: false,
+            });
           }
         });
       } catch (e) {
-        console.log('Connections endpoint failed:', e);
+        console.log('Companies search failed:', e);
       }
 
-      // Fetch suggested people (people you may know)
-      try {
-        const suggestedData = await api.get<any>('/queries/users/suggested');
-        const suggested = Array.isArray(suggestedData) ? suggestedData : (suggestedData.items || suggestedData.data || []);
-        console.log('Suggested people found:', suggested.length);
-        suggested.forEach((u: any) => {
-          if (!seenIds.has(u.id)) {
-            seenIds.add(u.id);
-            allPeople.push(mapUser(u, false));
-          }
-        });
-      } catch (e) {
-        console.log('Suggested endpoint failed:', e);
-      }
+      // If no companies from search, try other endpoints
+      if (allPeople.length <= 1) {
+        const endpoints = [
+          '/queries/companies/all',
+          '/queries/companies?page=1&limit=500',
+        ];
 
-      // Try to fetch all network users
-      try {
-        const networkData = await api.get<any>('/queries/users?page=1&limit=500');
-        const users = Array.isArray(networkData) ? networkData : (networkData.items || networkData.data || []);
-        console.log('Network users found:', users.length);
-        users.forEach((u: any) => {
-          if (!seenIds.has(u.id)) {
-            seenIds.add(u.id);
-            allPeople.push(mapUser(u, false));
-          }
-        });
-      } catch (e) {
-        console.log('Users endpoint failed:', e);
-      }
+        for (const endpoint of endpoints) {
+          try {
+            const response = await api.get<any>(endpoint);
+            const companies = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
+            console.log(`${endpoint} found:`, companies.length);
 
-      // Try network-specific endpoint
-      try {
-        const networkMembers = await api.get<any>('/queries/network/members');
-        const members = Array.isArray(networkMembers) ? networkMembers : (networkMembers.items || networkMembers.data || []);
-        console.log('Network members found:', members.length);
-        members.forEach((u: any) => {
-          if (!seenIds.has(u.id)) {
-            seenIds.add(u.id);
-            allPeople.push(mapUser(u, false));
+            companies.forEach((c: any) => {
+              if (!seenIds.has(c.id)) {
+                seenIds.add(c.id);
+                const logo = c.logo || c.image || c.thumbnail || c.avatar || '';
+                const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
+                const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
+                const lng = parseCoordinate(c.longitude) ?? parseCoordinate(c.lng);
+
+                allPeople.push({
+                  id: c.id,
+                  name: c.name || 'Unknown Organization',
+                  role: c.type || c.category || 'Organization',
+                  organization: '',
+                  location: c.address || c.city || c.country || '',
+                  avatar: logoUrl,
+                  lat: lat ?? NaN,
+                  lng: lng ?? NaN,
+                  isConnected: false,
+                });
+              }
+            });
+
+            if (allPeople.length > 1) break;
+          } catch (e) {
+            // Continue to next endpoint
           }
-        });
-      } catch (e) {
-        // Endpoint may not exist
+        }
       }
 
       const withCoords = allPeople.filter(p => isFinite(p.lat) && isFinite(p.lng));
-      console.log(`People: ${allPeople.length} total, ${withCoords.length} with valid coordinates`);
+      console.log(`Network: ${allPeople.length} total, ${withCoords.length} with valid coordinates`);
       if (withCoords.length > 0) {
         console.log('Sample coordinates:', withCoords.slice(0, 3).map(p => ({ name: p.name, lat: p.lat, lng: p.lng })));
       }
       setPeople(allPeople);
     } catch (err) {
-      console.error('Failed to load people:', err);
+      console.error('Failed to load network:', err);
       setError(err instanceof Error ? err.message : 'Failed to load network');
     } finally {
       setIsLoading(false);
