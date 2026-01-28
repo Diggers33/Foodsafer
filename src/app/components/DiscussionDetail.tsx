@@ -189,7 +189,13 @@ export function DiscussionDetail({ discussionId, onBack }: DiscussionDetailProps
         {/* Author Info */}
         <div className="flex items-start gap-3 mb-3">
           <Avatar className="w-10 h-10">
-            <img src={discussion.author.avatar} alt={discussion.author.name} className="w-full h-full object-cover" />
+            {discussion.author.avatar ? (
+              <img src={discussion.author.avatar} alt={discussion.author.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-semibold">
+                {discussion.author.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+            )}
           </Avatar>
           <div className="flex-1 min-w-0">
             <h4>{discussion.author.name}</h4>
@@ -295,7 +301,13 @@ function ReplyItem({ reply, isNested = false }: { reply: Reply; isNested?: boole
     <div className={isNested ? 'ml-8 mt-3' : ''}>
       <div className="flex items-start gap-3">
         <Avatar className="w-8 h-8">
-          <img src={reply.author.avatar} alt={reply.author.name} className="w-full h-full object-cover" />
+          {reply.author.avatar ? (
+            <img src={reply.author.avatar} alt={reply.author.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-xs font-semibold">
+              {reply.author.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+          )}
         </Avatar>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">

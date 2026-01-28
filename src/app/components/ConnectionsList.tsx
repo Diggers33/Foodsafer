@@ -123,8 +123,8 @@ export function ConnectionsList({ onBack }: { onBack: () => void }) {
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-[#E8F5E9]">
-                              <Users className="w-6 h-6 text-[#2E7D32]" />
+                            <div className="w-full h-full flex items-center justify-center bg-[#2E7D32] text-white font-semibold">
+                              {connection.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
                             </div>
                           )}
                         </div>
@@ -171,8 +171,8 @@ export function ConnectionsList({ onBack }: { onBack: () => void }) {
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-[#E8F5E9]">
-                              <Users className="w-6 h-6 text-[#2E7D32]" />
+                            <div className="w-full h-full flex items-center justify-center bg-[#2E7D32] text-white font-semibold">
+                              {connection.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
                             </div>
                           )}
                         </div>

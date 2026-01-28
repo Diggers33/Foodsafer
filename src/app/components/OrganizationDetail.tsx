@@ -457,12 +457,20 @@ export function OrganizationDetail({ orgId, onBack }: { orgId: string; onBack: (
             <div className="space-y-3">
               {org.team.map((member) => (
                 <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100">
-                    <img
-                      src={member.avatar}
-                      alt={member.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-[#2E7D32] flex items-center justify-center relative">
+                    <span className="text-white text-sm font-semibold absolute">
+                      {member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </span>
+                    {member.avatar && (
+                      <img
+                        src={member.avatar}
+                        alt={member.name}
+                        className="w-full h-full object-cover absolute inset-0"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm">{member.name}</h4>

@@ -183,7 +183,13 @@ function MemberCard({ member }: { member: Member }) {
       {/* Avatar with Online Indicator */}
       <div className="relative flex-shrink-0">
         <Avatar className="w-12 h-12">
-          <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+          {member.avatar ? (
+            <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-semibold">
+              {member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+          )}
         </Avatar>
         {member.isOnline && (
           <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#4CAF50] border-2 border-white rounded-full"></span>
@@ -226,7 +232,13 @@ function PendingMemberCard({ member }: { member: Member }) {
     <article className="bg-white rounded-lg shadow-sm p-4">
       <div className="flex items-start gap-3 mb-3">
         <Avatar className="w-12 h-12">
-          <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+          {member.avatar ? (
+            <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-semibold">
+              {member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+          )}
         </Avatar>
         <div className="flex-1 min-w-0">
           <h4 className="text-sm mb-1">{member.name}</h4>

@@ -234,7 +234,13 @@ export function NoteDetail({ noteId, onBack }: NoteDetailProps) {
           {/* Author and Meta */}
           <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
             <Avatar className="w-8 h-8">
-              <img src={note.author.avatar} alt={note.author.name} className="w-full h-full object-cover" />
+              {note.author.avatar ? (
+                <img src={note.author.avatar} alt={note.author.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-xs font-semibold">
+                  {note.author.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+              )}
             </Avatar>
             <div className="flex-1 min-w-0">
               <h4 className="text-sm">{note.author.name}</h4>

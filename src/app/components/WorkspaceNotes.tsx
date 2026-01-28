@@ -162,7 +162,13 @@ function NoteCard({ note, onClick }: { note: Note; onClick: () => void }) {
       {/* Footer */}
       <div className="flex items-center gap-2">
         <Avatar className="w-6 h-6">
-          <img src={note.author.avatar} alt={note.author.name} className="w-full h-full object-cover" />
+          {note.author.avatar ? (
+            <img src={note.author.avatar} alt={note.author.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-[8px] font-semibold">
+              {note.author.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+          )}
         </Avatar>
         <span className="text-xs text-[#757575]">{note.author.name}</span>
         <span className="text-xs text-[#757575]">•</span>

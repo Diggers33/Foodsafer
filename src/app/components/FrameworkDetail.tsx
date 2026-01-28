@@ -215,11 +215,17 @@ export function FrameworkDetail({ frameworkId, onBack }: { frameworkId: string; 
           <h4 className="mb-3">Created by</h4>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100">
-              <img
-                src={framework.author.avatar}
-                alt={framework.author.name}
-                className="w-full h-full object-cover"
-              />
+              {framework.author.avatar ? (
+                <img
+                  src={framework.author.avatar}
+                  alt={framework.author.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white font-semibold">
+                  {framework.author.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+              )}
             </div>
             <div className="flex-1">
               <h4>{framework.author.name}</h4>

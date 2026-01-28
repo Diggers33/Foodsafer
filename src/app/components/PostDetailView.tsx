@@ -303,7 +303,13 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
           {/* Author Info & Menu */}
           <div className="flex items-start gap-3 p-4">
             <Avatar className="w-12 h-12">
-              <img src={post.author.avatar} alt={post.author.name} className="w-full h-full object-cover" />
+              {post.author.avatar ? (
+                <img src={post.author.avatar} alt={post.author.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white font-semibold">
+                  {post.author.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+              )}
             </Avatar>
             <div className="flex-1 min-w-0">
               <h4>{post.author.name}</h4>
@@ -550,7 +556,13 @@ export function PostDetailView({ postId, onBack, posts, setPosts }: PostDetailVi
                     <div key={idx} className="flex items-center gap-3">
                       <div className="relative">
                         <Avatar className="w-10 h-10">
-                          <img src={reactor.avatar} alt={reactor.name} className="w-full h-full object-cover" />
+                          {reactor.avatar ? (
+                            <img src={reactor.avatar} alt={reactor.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-semibold">
+                              {reactor.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
                         </Avatar>
                         <div
                           className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center"

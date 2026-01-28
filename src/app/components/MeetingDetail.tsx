@@ -323,7 +323,13 @@ export function MeetingDetail({ meetingId, onBack }: MeetingDetailProps) {
             <div key={participant.id} className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar className="w-10 h-10">
-                  <img src={participant.avatar} alt={participant.name} className="w-full h-full object-cover" />
+                  {participant.avatar ? (
+                    <img src={participant.avatar} alt={participant.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-semibold">
+                      {participant.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
                 </Avatar>
                 <h4>{participant.name}</h4>
               </div>

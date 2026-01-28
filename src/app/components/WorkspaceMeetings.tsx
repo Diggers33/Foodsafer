@@ -237,7 +237,13 @@ function MeetingCard({ meeting, onClick }: { meeting: Meeting; onClick: () => vo
           <div className="flex items-center -space-x-2">
             {meeting.participants.map((participant, index) => (
               <Avatar key={index} className="w-6 h-6 border-2 border-white">
-                <img src={participant.avatar} alt={participant.name} className="w-full h-full object-cover" />
+                {participant.avatar ? (
+                  <img src={participant.avatar} alt={participant.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-[8px] font-semibold">
+                    {participant.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                )}
               </Avatar>
             ))}
           </div>

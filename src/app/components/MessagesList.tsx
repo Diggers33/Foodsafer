@@ -158,11 +158,17 @@ export function MessagesList({ onBack }: { onBack: () => void }) {
             <div className="flex gap-3">
               <div className="relative flex-shrink-0">
                 <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100">
-                  <img
-                    src={conversation.participant.avatar}
-                    alt={conversation.participant.name}
-                    className="w-full h-full object-cover"
-                  />
+                  {conversation.participant.avatar ? (
+                    <img
+                      src={conversation.participant.avatar}
+                      alt={conversation.participant.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white font-semibold">
+                      {conversation.participant.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
                 </div>
                 {conversation.participant.online && (
                   <div className="absolute bottom-0 right-0 w-4 h-4 bg-[#4CAF50] border-2 border-white rounded-full"></div>

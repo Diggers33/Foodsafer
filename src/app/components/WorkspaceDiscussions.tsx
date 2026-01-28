@@ -176,7 +176,13 @@ function DiscussionCard({
       {/* Author Info */}
       <div className="flex items-start gap-3 mb-3 pl-4">
         <Avatar className="w-8 h-8">
-          <img src={discussion.author.avatar} alt={discussion.author.name} className="w-full h-full object-cover" />
+          {discussion.author.avatar ? (
+            <img src={discussion.author.avatar} alt={discussion.author.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-xs font-semibold">
+              {discussion.author.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+          )}
         </Avatar>
         <div className="flex-1 min-w-0">
           <h4 className="line-clamp-1">{discussion.author.name}</h4>

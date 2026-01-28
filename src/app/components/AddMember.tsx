@@ -105,7 +105,13 @@ export function AddMember({ onClose }: AddMemberProps) {
                   }`}
                 >
                   <Avatar className="w-10 h-10">
-                    <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    {user.avatar ? (
+                      <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-sm font-semibold">
+                        {user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
                   </Avatar>
                   <div className="flex-1 text-left">
                     <h4 className="text-sm">{user.name}</h4>

@@ -321,11 +321,17 @@ export function TrainingDetail({ courseId, onBack }: { courseId: string; onBack:
           <h4 className="mb-3">Instructor</h4>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100">
-              <img
-                src={course.instructor.avatar}
-                alt={course.instructor.name}
-                className="w-full h-full object-cover"
-              />
+              {course.instructor.avatar ? (
+                <img
+                  src={course.instructor.avatar}
+                  alt={course.instructor.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-[#FF9800] flex items-center justify-center text-white font-semibold">
+                  {course.instructor.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+              )}
             </div>
             <div className="flex-1">
               <h4>{course.instructor.name}</h4>
