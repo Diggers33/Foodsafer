@@ -52,10 +52,8 @@ export function LoginScreen() {
   };
 
   const handleSSOLogin = (provider: 'google' | 'microsoft' | 'linkedin') => {
-    // Get the current URL to use as callback
-    const callbackUrl = encodeURIComponent(window.location.origin + '/auth/callback');
-    // Redirect to backend OAuth endpoint
-    window.location.href = `${API_BASE}/auth/${provider}?callbackUrl=${callbackUrl}`;
+    // Redirect to backend OAuth endpoint - backend handles the full OAuth flow
+    window.location.href = `${API_BASE}/auth/${provider}`;
   };
 
   // Check for OAuth callback token in URL
