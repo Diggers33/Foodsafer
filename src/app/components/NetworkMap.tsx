@@ -78,64 +78,39 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       const allPeople: NetworkPerson[] = [];
       const seenIds = new Set<string>();
 
-      // Try multiple user endpoints with different patterns
-      const userEndpoints = [
-        '/queries/users/search?q=&page=1&limit=500',
-        '/queries/network/users',
-        '/queries/network/map',
-        '/queries/map/users',
-      ];
+      // Fetch from the network endpoint that returns both users and companies
+      const response = await api.get<any>('/queries/network?filterBy=&mode=2&relations=true');
+      const items = Array.isArray(response) ? response : [];
+      console.log('Network items found:', items.length);
 
-      for (const endpoint of userEndpoints) {
-        try {
-          const response = await api.get<any>(endpoint);
-          const users = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
-          console.log(`${endpoint} found:`, users.length);
+      items.forEach((item: any) => {
+        if (seenIds.has(item.id)) return;
+        seenIds.add(item.id);
 
-          users.forEach((u: any) => {
-            if (!seenIds.has(u.id)) {
-              seenIds.add(u.id);
-              allPeople.push(mapUser(u, false));
-            }
+        // Check if it's a user (type: 1) or company (type: 2)
+        if (item.type === 1 || item.firstName) {
+          // It's a user
+          allPeople.push(mapUser(item, false));
+        } else {
+          // It's a company/organization
+          const logo = item.logo || item.image || item.thumbnail || item.avatar || '';
+          const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
+          const lat = parseCoordinate(item.latitude) ?? parseCoordinate(item.lat);
+          const lng = parseCoordinate(item.longitude) ?? parseCoordinate(item.lng);
+
+          allPeople.push({
+            id: item.id,
+            name: item.name || 'Unknown Organization',
+            role: 'Organization',
+            organization: '',
+            location: item.address || item.city || item.country || '',
+            avatar: logoUrl,
+            lat: lat ?? NaN,
+            lng: lng ?? NaN,
+            isConnected: false,
           });
-
-          if (allPeople.length > 0) break;
-        } catch (e) {
-          console.log(`${endpoint} failed:`, e);
         }
-      }
-
-      // Also try to fetch companies/organizations
-      try {
-        const searchResponse = await api.get<any>('/queries/companies/search?q=&page=1&limit=500');
-        const companies = Array.isArray(searchResponse) ? searchResponse : (searchResponse.items || searchResponse.data || searchResponse.results || []);
-        console.log('Companies found:', companies.length);
-
-        companies.forEach((c: any) => {
-          const companyId = `company_${c.id}`;
-          if (!seenIds.has(companyId)) {
-            seenIds.add(companyId);
-            const logo = c.logo || c.image || c.thumbnail || c.avatar || '';
-            const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
-            const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
-            const lng = parseCoordinate(c.longitude) ?? parseCoordinate(c.lng);
-
-            allPeople.push({
-              id: c.id,
-              name: c.name || 'Unknown Organization',
-              role: c.type || c.category || 'Organization',
-              organization: '',
-              location: c.address || c.city || c.country || '',
-              avatar: logoUrl,
-              lat: lat ?? NaN,
-              lng: lng ?? NaN,
-              isConnected: false,
-            });
-          }
-        });
-      } catch (e) {
-        console.log('Companies search failed:', e);
-      }
+      });
 
       const withCoords = allPeople.filter(p => isFinite(p.lat) && isFinite(p.lng));
       console.log(`Network: ${allPeople.length} total, ${withCoords.length} with valid coordinates`);
