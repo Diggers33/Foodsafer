@@ -17,9 +17,12 @@ interface GoogleMapViewProps {
   locations: Location[];
   onMarkerClick: (id: string) => void;
   onBoundsChange?: (visibleIds: string[]) => void;
+  savedCenter?: { lat: number; lng: number } | null;
+  savedZoom?: number | null;
+  onMapMove?: (center: { lat: number; lng: number }, zoom: number) => void;
 }
 
-export function GoogleMapView({ locations, onMarkerClick, onBoundsChange }: GoogleMapViewProps) {
+export function GoogleMapView({ locations, onMarkerClick, onBoundsChange, savedCenter, savedZoom, onMapMove }: GoogleMapViewProps) {
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
@@ -50,8 +53,9 @@ export function GoogleMapView({ locations, onMarkerClick, onBoundsChange }: Goog
     getLocationFromIP();
   }, []);
 
-  // Use user location if available, otherwise fall back to default
-  const mapCenter = userLocation || fallbackCenter;
+  // Use saved center if available, then user location, then fallback
+  const mapCenter = savedCenter || userLocation || fallbackCenter;
+  const mapZoom = savedZoom || 12;
 
   const selectedMarker = locations.find(loc => loc.id === selectedLocation);
 
@@ -69,15 +73,25 @@ export function GoogleMapView({ locations, onMarkerClick, onBoundsChange }: Goog
         <Map
           mapId="foodsafer-network-map"
           defaultCenter={mapCenter}
-          defaultZoom={12}
+          defaultZoom={mapZoom}
           gestureHandling="greedy"
           disableDefaultUI={false}
           style={{ width: '100%', height: '100%' }}
           onIdle={(event) => {
             // Use onIdle instead of onBoundsChanged to prevent flashing
             // onIdle fires after the map has finished moving/zooming
+            const map = event.map;
+
+            // Save current map position and zoom
+            if (onMapMove) {
+              const center = map.getCenter();
+              const zoom = map.getZoom();
+              if (center && zoom !== undefined) {
+                onMapMove({ lat: center.lat(), lng: center.lng() }, zoom);
+              }
+            }
+
             if (onBoundsChange) {
-              const map = event.map;
               const bounds = map.getBounds();
               if (bounds) {
                 const ne = bounds.getNorthEast();

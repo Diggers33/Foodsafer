@@ -78,6 +78,8 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<FilterType>('all');
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapZoom, setMapZoom] = useState<number | null>(null);
 
   useEffect(() => {
     fetchPeople();
@@ -313,6 +315,12 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           {/* Google Map */}
           <GoogleMapView
             locations={mapLocations}
+            savedCenter={mapCenter}
+            savedZoom={mapZoom}
+            onMapMove={(center, zoom) => {
+              setMapCenter(center);
+              setMapZoom(zoom);
+            }}
             onMarkerClick={(id) => {
               const item = filteredPeople.find(p => p.id === id);
               if (item?.itemType === 'organization') {
