@@ -21,6 +21,7 @@ interface RecentItem {
   title: string;
   type: string;
   thumbnail: string;
+  fileUrl: string;
 }
 
 const API_BASE = 'https://my.foodsafer.com:443/api';
@@ -63,17 +64,22 @@ const categories: ResourceCategory[] = [
 function mapLibraryItem(item: any): RecentItem {
   const thumbnail = item.thumbnail || item.image || item.cover;
   const thumbUrl = thumbnail ? (thumbnail.startsWith('http') ? thumbnail : `${API_BASE}${thumbnail}`) : '';
+  const rawUrl = item.url || item.fileUrl || item.file || item.path ||
+                 item.downloadUrl || item.link || item.attachment || '';
+  const fileUrl = rawUrl ? (rawUrl.startsWith('http') ? rawUrl : `${API_BASE}${rawUrl}`) : '';
 
   return {
     id: item.id,
     title: item.title || item.name || 'Untitled',
     type: item.type || item.category || 'Library',
     thumbnail: thumbUrl,
+    fileUrl,
   };
 }
 
 export function ResourcesHub({ onProfileClick }: { onProfileClick: () => void }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -165,7 +171,14 @@ export function ResourcesHub({ onProfileClick }: { onProfileClick: () => void })
               {recentItems.map((item) => (
                 <article
                   key={item.id}
-                  className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3"
+                  onClick={() => {
+                    if (item.fileUrl) {
+                      window.open(item.fileUrl, '_blank');
+                    } else {
+                      setSelectedCategory('library');
+                    }
+                  }}
+                  className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3 cursor-pointer hover:shadow-md transition-shadow"
                 >
                   <div className="w-20 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
                     {item.thumbnail ? (
