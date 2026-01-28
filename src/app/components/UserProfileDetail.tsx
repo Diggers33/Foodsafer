@@ -1,5 +1,7 @@
-import { ArrowLeft, MapPin, Building, MessageSquare, UserPlus, Mail, Phone } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, MapPin, Building, MessageSquare, UserPlus, Mail, Phone, Loader2, Check } from 'lucide-react';
 import { Button } from './ui/button';
+import { usersService } from '@/api';
 
 export interface UserProfileData {
   id: string;
@@ -15,6 +17,22 @@ export interface UserProfileData {
 }
 
 export function UserProfileDetail({ user, onBack }: { user: UserProfileData; onBack: () => void }) {
+  const [isConnected, setIsConnected] = useState(user.isConnected);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionSent, setConnectionSent] = useState(false);
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      await usersService.connect(user.id);
+      setConnectionSent(true);
+    } catch (err) {
+      console.error('Failed to send connection request:', err);
+      alert('Failed to send connection request. Please try again.');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -58,15 +76,28 @@ export function UserProfileDetail({ user, onBack }: { user: UserProfileData; onB
 
         {/* Action Buttons */}
         <div className="flex gap-3 mt-6">
-          {user.isConnected ? (
+          {isConnected ? (
             <Button className="flex-1 bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9]">
               <MessageSquare className="w-4 h-4 mr-2" />
               Message
             </Button>
+          ) : connectionSent ? (
+            <Button className="flex-1 bg-[#E8F5E9] text-[#2E7D32]" disabled>
+              <Check className="w-4 h-4 mr-2" />
+              Request Sent
+            </Button>
           ) : (
-            <Button className="flex-1 bg-[#2E7D32] hover:bg-[#1B5E20] text-white">
-              <UserPlus className="w-4 h-4 mr-2" />
-              Connect
+            <Button
+              className="flex-1 bg-[#2E7D32] hover:bg-[#1B5E20] text-white"
+              onClick={handleConnect}
+              disabled={isConnecting}
+            >
+              {isConnecting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <UserPlus className="w-4 h-4 mr-2" />
+              )}
+              {isConnecting ? 'Connecting...' : 'Connect'}
             </Button>
           )}
         </div>
