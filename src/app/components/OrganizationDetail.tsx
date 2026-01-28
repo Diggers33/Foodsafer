@@ -44,6 +44,8 @@ interface OrganizationData {
 const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapOrganization(c: any): OrganizationData {
+  console.log('Company API response:', c);
+
   // Logo - used in list view and profile card
   const logoRaw = c.logo || c.thumbnail || c.avatar || c.icon || '';
   const logo = logoRaw ? (logoRaw.startsWith('http') ? logoRaw : `${API_BASE}${logoRaw}`) : '';
@@ -52,7 +54,9 @@ function mapOrganization(c: any): OrganizationData {
   const coverRaw = c.coverImage || c.cover || c.banner || c.displayImage || c.headerImage || c.image || '';
   const coverUrl = coverRaw ? (coverRaw.startsWith('http') ? coverRaw : `${API_BASE}${coverRaw}`) : '';
 
-  const team = (c.members || c.employees || []).slice(0, 5).map((m: any) => {
+  // Team members - check various possible field names
+  const teamData = c.members || c.employees || c.users || c.team || c.userCompanies || c.companyUsers || [];
+  const team = (Array.isArray(teamData) ? teamData : []).slice(0, 5).map((m: any) => {
     const user = m.user || m;
     const avatar = user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${API_BASE}${user.avatar}`) : '';
     return {
@@ -85,11 +89,11 @@ function mapOrganization(c: any): OrganizationData {
       website: c.website || c.url || '',
       address: c.fullAddress || c.address || '',
     },
-    recentActivity: (c.activities || c.posts || []).slice(0, 5).map((a: any) => ({
+    recentActivity: (c.activities || c.posts || c.news || c.updates || c.feed || []).slice(0, 5).map((a: any) => ({
       id: a.id,
       type: a.type || 'post',
-      title: a.title || a.text || '',
-      date: a.createdAt || a.date || '',
+      title: a.title || a.text || a.content || a.message || '',
+      date: a.createdAt || a.date || a.publishedAt || a.timestamp || '',
     })),
     team,
   };
