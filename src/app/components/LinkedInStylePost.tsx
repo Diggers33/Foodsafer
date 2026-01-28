@@ -2,6 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { X, ImageIcon, FileText, Video, Smile, AtSign, Hash } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
+import { useApp } from '../App';
+
+const API_BASE = 'https://my.foodsafer.com:443/api';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +48,7 @@ const mentionSuggestions = [
 const DRAFT_KEY = 'foodsafer_post_draft';
 
 export function LinkedInStylePost({ onClose, onPost, initialData, isEditing = false }: LinkedInStylePostProps) {
+  const { currentUser } = useApp();
   const [content, setContent] = useState(initialData?.content || '');
   const [images, setImages] = useState<string[]>(initialData?.images || []);
   const [documents, setDocuments] = useState<{ name: string; url: string; size?: string }[]>([]);
@@ -240,10 +244,20 @@ export function LinkedInStylePost({ onClose, onPost, initialData, isEditing = fa
         <div className="bg-white rounded-lg p-4">
           <div className="flex items-center gap-3 mb-4">
             <Avatar className="w-12 h-12">
-              <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop" alt="You" className="w-full h-full object-cover" />
+              {currentUser?.avatar ? (
+                <img
+                  src={currentUser.avatar.startsWith('http') ? currentUser.avatar : `${API_BASE}${currentUser.avatar}`}
+                  alt={`${currentUser.firstName} ${currentUser.lastName}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-lg font-semibold">
+                  {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
+                </div>
+              )}
             </Avatar>
             <div className="flex-1">
-              <h4>You</h4>
+              <h4>{currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'You'}</h4>
               <p className="text-sm text-[#757575]">Public</p>
             </div>
           </div>
