@@ -90,10 +90,30 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       const allPeople: NetworkPerson[] = [];
       const seenIds = new Set<string>();
 
-      // Fetch from the network endpoint that returns both users and companies
-      const response = await api.get<any>('/queries/network?filterBy=&mode=2&relations=true');
-      const items = Array.isArray(response) ? response : [];
-      console.log('Network items found:', items.length);
+      // Fetch organizations (mode=2) and users (mode=1) separately
+      let items: any[] = [];
+
+      // Fetch organizations
+      try {
+        const orgsResponse = await api.get<any>('/queries/network?filterBy=&mode=2&relations=true');
+        const orgs = Array.isArray(orgsResponse) ? orgsResponse : [];
+        console.log('Organizations found:', orgs.length);
+        items.push(...orgs);
+      } catch (e) {
+        console.log('Failed to fetch organizations:', e);
+      }
+
+      // Fetch users
+      try {
+        const usersResponse = await api.get<any>('/queries/network?filterBy=&mode=1&relations=true');
+        const users = Array.isArray(usersResponse) ? usersResponse : [];
+        console.log('Users found:', users.length);
+        items.push(...users);
+      } catch (e) {
+        console.log('Failed to fetch users:', e);
+      }
+
+      console.log('Network items total:', items.length);
 
       // First pass: collect all companies with coordinates for user lookup
       const companyCoords = new Map<string, { lat: number; lng: number }>();
