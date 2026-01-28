@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, List, MapPin, Navigation, MessageSquare, Users as UsersIcon, Loader2 } from 'lucide-react';
+import { Search, Filter, List, MapPin, Navigation, MessageSquare, Users as UsersIcon, Building2, Loader2 } from 'lucide-react';
 import { AppHeader } from './AppHeader';
 import { OrganizationDetail } from './OrganizationDetail';
 import { MessagesList } from './MessagesList';
@@ -8,6 +8,9 @@ import { NetworkSearch } from './NetworkSearch';
 import { GoogleMapView } from './GoogleMapView';
 import { UserProfileDetail } from './UserProfileDetail';
 import { api } from '@/api';
+
+type NetworkItemType = 'user' | 'organization';
+type FilterType = 'all' | 'users' | 'organizations';
 
 interface NetworkPerson {
   id: string;
@@ -19,6 +22,7 @@ interface NetworkPerson {
   lat: number;
   lng: number;
   isConnected: boolean;
+  itemType: NetworkItemType;
 }
 
 const API_BASE = 'https://my.foodsafer.com:443/api';
@@ -52,6 +56,7 @@ function mapUser(u: any, isConnected: boolean = false): NetworkPerson {
     lat: lat ?? NaN,
     lng: lng ?? NaN,
     isConnected,
+    itemType: 'user',
   };
 }
 
@@ -66,6 +71,7 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   const [visiblePeopleIds, setVisiblePeopleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<FilterType>('all');
 
   useEffect(() => {
     fetchPeople();
@@ -108,6 +114,7 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             lat: lat ?? NaN,
             lng: lng ?? NaN,
             isConnected: false,
+            itemType: 'organization',
           });
         }
       });
@@ -158,8 +165,16 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
     );
   }
 
-  // Convert people to Google Maps location format - only include items with valid coordinates
-  const mapLocations = people
+  // Filter people based on selected filter type
+  const filteredPeople = people.filter(p => {
+    if (filterType === 'all') return true;
+    if (filterType === 'users') return p.itemType === 'user';
+    if (filterType === 'organizations') return p.itemType === 'organization';
+    return true;
+  });
+
+  // Convert filtered people to Google Maps location format - only include items with valid coordinates
+  const mapLocations = filteredPeople
     .filter(p => isFinite(p.lat) && isFinite(p.lng))
     .map(person => ({
       id: person.id,
@@ -177,7 +192,7 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       {/* Subheader with controls */}
       <div className="bg-white border-b border-gray-200 sticky top-14 z-30">
         <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-3">
             <h1>Network</h1>
             <div className="flex items-center gap-3">
               <button onClick={() => setShowMessages(true)}>
@@ -189,9 +204,6 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
               <button onClick={() => setShowSearch(true)}>
                 <Search className="w-6 h-6 text-[#757575]" />
               </button>
-              <button>
-                <Filter className="w-6 h-6 text-[#757575]" />
-              </button>
               <button
                 onClick={() => setView(view === 'map' ? 'list' : 'map')}
                 className={view === 'list' ? 'text-[#2E7D32]' : 'text-[#757575]'}
@@ -199,6 +211,41 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
                 <List className="w-6 h-6" />
               </button>
             </div>
+          </div>
+          {/* Filter Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilterType('all')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                filterType === 'all'
+                  ? 'bg-[#2E7D32] text-white'
+                  : 'bg-[#F5F5F5] text-[#757575] hover:bg-[#E8F5E9]'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterType('users')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
+                filterType === 'users'
+                  ? 'bg-[#2E7D32] text-white'
+                  : 'bg-[#F5F5F5] text-[#757575] hover:bg-[#E8F5E9]'
+              }`}
+            >
+              <UsersIcon className="w-4 h-4" />
+              Users
+            </button>
+            <button
+              onClick={() => setFilterType('organizations')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
+                filterType === 'organizations'
+                  ? 'bg-[#2E7D32] text-white'
+                  : 'bg-[#F5F5F5] text-[#757575] hover:bg-[#E8F5E9]'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              Organizations
+            </button>
           </div>
         </div>
       </div>
@@ -210,7 +257,12 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           <GoogleMapView
             locations={mapLocations}
             onMarkerClick={(id) => {
-              setSelectedUser(id);
+              const item = filteredPeople.find(p => p.id === id);
+              if (item?.itemType === 'organization') {
+                setSelectedOrg(id);
+              } else {
+                setSelectedUser(id);
+              }
             }}
             onBoundsChange={(visibleIds) => {
               setVisiblePeopleIds(visibleIds);
@@ -222,18 +274,20 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-3"></div>
             <div className="px-4 pb-4">
               {(() => {
-                // Filter to show only people visible in current map view
-                // If no bounds calculated yet, show all people with valid coords
-                const peopleWithCoords = people.filter(p => isFinite(p.lat) && isFinite(p.lng));
-                const visiblePeople = visiblePeopleIds.length > 0
-                  ? peopleWithCoords.filter(p => visiblePeopleIds.includes(p.id))
-                  : peopleWithCoords;
-                const itemCount = visiblePeople.length;
+                // Filter to show only items visible in current map view
+                // If no bounds calculated yet, show all items with valid coords
+                const itemsWithCoords = filteredPeople.filter(p => isFinite(p.lat) && isFinite(p.lng));
+                const visibleItems = visiblePeopleIds.length > 0
+                  ? itemsWithCoords.filter(p => visiblePeopleIds.includes(p.id))
+                  : itemsWithCoords;
+                const itemCount = visibleItems.length;
+                const itemLabel = filterType === 'organizations' ? 'organization' : filterType === 'users' ? 'user' : 'item';
+                const itemLabelPlural = filterType === 'organizations' ? 'organizations' : filterType === 'users' ? 'users' : 'items';
 
                 return (
                   <>
                     <div className="flex items-center justify-between mb-3">
-                      <h3>{itemCount} {itemCount === 1 ? 'person' : 'people'} in this area</h3>
+                      <h3>{itemCount} {itemCount === 1 ? itemLabel : itemLabelPlural} in this area</h3>
                     </div>
                     {isLoading ? (
                       <div className="flex justify-center py-4">
@@ -242,11 +296,16 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
                     ) : error ? (
                       <p className="text-red-600 text-sm text-center py-4">{error}</p>
                     ) : itemCount === 0 ? (
-                      <p className="text-[#757575] text-center py-4">No people in this area. Try zooming out.</p>
+                      <p className="text-[#757575] text-center py-4">No {itemLabelPlural} in this area. Try zooming out.</p>
                     ) : (
                       <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {visiblePeople.map((person) => (
-                          <NetworkPersonCard key={person.id} person={person} compact onSelect={() => setSelectedUser(person.id)} />
+                        {visibleItems.map((person) => (
+                          <NetworkPersonCard
+                            key={person.id}
+                            person={person}
+                            compact
+                            onSelect={() => person.itemType === 'organization' ? setSelectedOrg(person.id) : setSelectedUser(person.id)}
+                          />
                         ))}
                       </div>
                     )}
@@ -267,16 +326,22 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             </div>
           ) : error ? (
             <p className="text-red-600 text-sm text-center py-8">{error}</p>
-          ) : people.length === 0 ? (
-            <p className="text-[#757575] text-center py-8">No people found in network</p>
+          ) : filteredPeople.length === 0 ? (
+            <p className="text-[#757575] text-center py-8">
+              No {filterType === 'organizations' ? 'organizations' : filterType === 'users' ? 'users' : 'items'} found in network
+            </p>
           ) : (
             <>
               <div className="mb-3 text-sm text-[#757575]">
-                {people.length} people in network
+                {filteredPeople.length} {filterType === 'organizations' ? 'organizations' : filterType === 'users' ? 'users' : 'items'} in network
               </div>
               <div className="space-y-3">
-                {people.map((person) => (
-                  <NetworkPersonCard key={person.id} person={person} onSelect={() => setSelectedUser(person.id)} />
+                {filteredPeople.map((person) => (
+                  <NetworkPersonCard
+                    key={person.id}
+                    person={person}
+                    onSelect={() => person.itemType === 'organization' ? setSelectedOrg(person.id) : setSelectedUser(person.id)}
+                  />
                 ))}
               </div>
             </>
@@ -288,25 +353,34 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
 }
 
 function NetworkPersonCard({ person, compact = false, onSelect }: { person: NetworkPerson; compact?: boolean; onSelect: () => void }) {
+  const isOrg = person.itemType === 'organization';
+
   return (
     <article onClick={onSelect} className="bg-white rounded-lg shadow-sm overflow-hidden flex gap-3 p-3 cursor-pointer hover:shadow-md transition-shadow">
-      <div className={`${compact ? 'w-12 h-12' : 'w-16 h-16'} rounded-full overflow-hidden flex-shrink-0 bg-gray-100`}>
+      <div className={`${compact ? 'w-12 h-12' : 'w-16 h-16'} ${isOrg ? 'rounded-lg' : 'rounded-full'} overflow-hidden flex-shrink-0 bg-gray-100`}>
         {person.avatar ? (
           <img src={person.avatar} alt={person.name} className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full bg-[#2E7D32] flex items-center justify-center text-white text-lg font-semibold">
-            {person.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+          <div className={`w-full h-full ${isOrg ? 'bg-[#1976D2]' : 'bg-[#2E7D32]'} flex items-center justify-center text-white text-lg font-semibold`}>
+            {isOrg ? (
+              <Building2 className="w-6 h-6" />
+            ) : (
+              person.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+            )}
           </div>
         )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <h4 className="line-clamp-1">{person.name}</h4>
+          {isOrg && (
+            <span className="text-xs bg-[#E3F2FD] text-[#1976D2] px-2 py-0.5 rounded-full">Org</span>
+          )}
           {person.isConnected && (
             <span className="text-xs bg-[#E8F5E9] text-[#2E7D32] px-2 py-0.5 rounded-full">Connected</span>
           )}
         </div>
-        {person.role && <p className="text-sm text-[#757575] line-clamp-1">{person.role}</p>}
+        {person.role && person.role !== 'Organization' && <p className="text-sm text-[#757575] line-clamp-1">{person.role}</p>}
         {person.organization && <p className="text-xs text-[#757575] line-clamp-1">{person.organization}</p>}
         {person.location && (
           <div className="flex items-center gap-1 text-xs text-[#757575] mt-1">
