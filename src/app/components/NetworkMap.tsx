@@ -78,16 +78,43 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       const allPeople: NetworkPerson[] = [];
       const seenIds = new Set<string>();
 
-      // Try to fetch companies and convert them to "people" entries (organization contacts)
+      // Try multiple user endpoints with different patterns
+      const userEndpoints = [
+        '/queries/users/search?q=&page=1&limit=500',
+        '/queries/network/users',
+        '/queries/network/map',
+        '/queries/map/users',
+      ];
+
+      for (const endpoint of userEndpoints) {
+        try {
+          const response = await api.get<any>(endpoint);
+          const users = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
+          console.log(`${endpoint} found:`, users.length);
+
+          users.forEach((u: any) => {
+            if (!seenIds.has(u.id)) {
+              seenIds.add(u.id);
+              allPeople.push(mapUser(u, false));
+            }
+          });
+
+          if (allPeople.length > 0) break;
+        } catch (e) {
+          console.log(`${endpoint} failed:`, e);
+        }
+      }
+
+      // Also try to fetch companies/organizations
       try {
         const searchResponse = await api.get<any>('/queries/companies/search?q=&page=1&limit=500');
         const companies = Array.isArray(searchResponse) ? searchResponse : (searchResponse.items || searchResponse.data || searchResponse.results || []);
         console.log('Companies found:', companies.length);
 
         companies.forEach((c: any) => {
-          if (!seenIds.has(c.id)) {
-            seenIds.add(c.id);
-            // Map company as a network contact
+          const companyId = `company_${c.id}`;
+          if (!seenIds.has(companyId)) {
+            seenIds.add(companyId);
             const logo = c.logo || c.image || c.thumbnail || c.avatar || '';
             const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
             const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
@@ -108,48 +135,6 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
         });
       } catch (e) {
         console.log('Companies search failed:', e);
-      }
-
-      // If no companies from search, try other endpoints
-      if (allPeople.length <= 1) {
-        const endpoints = [
-          '/queries/companies/all',
-          '/queries/companies?page=1&limit=500',
-        ];
-
-        for (const endpoint of endpoints) {
-          try {
-            const response = await api.get<any>(endpoint);
-            const companies = Array.isArray(response) ? response : (response.items || response.data || response.results || []);
-            console.log(`${endpoint} found:`, companies.length);
-
-            companies.forEach((c: any) => {
-              if (!seenIds.has(c.id)) {
-                seenIds.add(c.id);
-                const logo = c.logo || c.image || c.thumbnail || c.avatar || '';
-                const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
-                const lat = parseCoordinate(c.latitude) ?? parseCoordinate(c.lat);
-                const lng = parseCoordinate(c.longitude) ?? parseCoordinate(c.lng);
-
-                allPeople.push({
-                  id: c.id,
-                  name: c.name || 'Unknown Organization',
-                  role: c.type || c.category || 'Organization',
-                  organization: '',
-                  location: c.address || c.city || c.country || '',
-                  avatar: logoUrl,
-                  lat: lat ?? NaN,
-                  lng: lng ?? NaN,
-                  isConnected: false,
-                });
-              }
-            });
-
-            if (allPeople.length > 1) break;
-          } catch (e) {
-            // Continue to next endpoint
-          }
-        }
       }
 
       const withCoords = allPeople.filter(p => isFinite(p.lat) && isFinite(p.lng));
