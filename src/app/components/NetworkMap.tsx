@@ -200,6 +200,7 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   if (showSearch) {
     return (
       <NetworkSearch
+        networkData={people}
         onBack={() => setShowSearch(false)}
         onSelect={(id, type) => {
           setShowSearch(false);

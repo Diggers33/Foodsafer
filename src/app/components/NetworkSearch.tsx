@@ -1,7 +1,6 @@
-import { ArrowLeft, Search, MapPin, Building2, Beaker, GraduationCap, Users, Wrench, Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { ArrowLeft, Search, MapPin, Building2, Beaker, GraduationCap, Users, Wrench } from 'lucide-react';
+import { useState } from 'react';
 import { Badge } from './ui/badge';
-import { api } from '@/api';
 
 interface SearchResult {
   id: string;
@@ -14,47 +13,6 @@ interface SearchResult {
   verified?: boolean;
 }
 
-const API_BASE = 'https://my.foodsafer.com:443/api';
-
-function mapCompanyToResult(c: any): SearchResult {
-  // Check multiple possible logo field names
-  const logoRaw = c.logo || c.thumbnail || c.avatar || c.icon || '';
-  const logo = logoRaw ? (logoRaw.startsWith('http') ? logoRaw : `${API_BASE}${logoRaw}`) : '';
-  const address = c.address || c.city || c.country || '';
-  // Ensure category is always a string
-  const category = String(c.type || c.category || 'Organization');
-
-  return {
-    id: c.id,
-    name: c.name || 'Unknown',
-    type: 'organization',
-    category,
-    location: address,
-    thumbnail: logo,
-    description: c.description || '',
-    verified: c.verified || c.isVerified || false,
-  };
-}
-
-function mapUserToResult(u: any): SearchResult {
-  const avatar = u.avatar ? (u.avatar.startsWith('http') ? u.avatar : `${API_BASE}${u.avatar}`) : '';
-  const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Unknown';
-  const company = u.userCompanies?.[0]?.company?.name || '';
-  // Ensure category is always a string
-  const category = String(u.jobTitle || u.role || 'Member');
-
-  return {
-    id: u.id,
-    name,
-    type: 'person',
-    category,
-    location: u.city || u.country || '',
-    thumbnail: avatar,
-    description: company,
-    verified: false,
-  };
-}
-
 const categories = [
   { id: 'all', label: 'All', icon: null },
   { id: 'manufacturer', label: 'Manufacturers', icon: <Building2 className="w-4 h-4" /> },
@@ -64,73 +22,53 @@ const categories = [
   { id: 'tools', label: 'Tools', icon: <Wrench className="w-4 h-4" /> },
 ];
 
-export function NetworkSearch({ onBack, onSelect }: { onBack: () => void; onSelect: (id: string, type: string) => void }) {
+interface NetworkDataItem {
+  id: string;
+  name: string;
+  role: string;
+  organization: string;
+  location: string;
+  avatar: string;
+  itemType: 'user' | 'organization';
+}
+
+interface NetworkSearchProps {
+  networkData: NetworkDataItem[];
+  onBack: () => void;
+  onSelect: (id: string, type: string) => void;
+}
+
+export function NetworkSearch({ networkData, onBack, onSelect }: NetworkSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [initialCompanies, setInitialCompanies] = useState<SearchResult[]>([]);
 
-  // Load initial data from network endpoint (users and organizations)
-  useEffect(() => {
-    fetchNetworkData();
-  }, []);
+  // Convert network data to search results format (instant, no API call)
+  const allResults: SearchResult[] = networkData.map(item => ({
+    id: item.id,
+    name: item.name,
+    type: item.itemType === 'organization' ? 'organization' as const : 'person' as const,
+    category: item.itemType === 'organization' ? 'Organization' : (item.role || 'Member'),
+    location: item.location || '',
+    thumbnail: item.avatar || '',
+    description: item.itemType === 'user' ? item.organization : '',
+    verified: false,
+  }));
 
-  const fetchNetworkData = async () => {
-    setIsLoading(true);
-    try {
-      const allResults: SearchResult[] = [];
+  // Filter results based on search query and category
+  const query = searchQuery.toLowerCase();
+  const filteredResults = allResults.filter((result) => {
+    // Filter by search query
+    const matchesQuery = !searchQuery.trim() ||
+      (result.name || '').toLowerCase().includes(query) ||
+      (result.category || '').toLowerCase().includes(query) ||
+      (result.location || '').toLowerCase().includes(query) ||
+      (result.description || '').toLowerCase().includes(query);
 
-      // Fetch organizations (mode=2)
-      try {
-        const orgsData = await api.get<any[]>('/queries/network?filterBy=&mode=2&relations=true');
-        const orgs = Array.isArray(orgsData) ? orgsData.map(mapCompanyToResult) : [];
-        allResults.push(...orgs);
-      } catch (e) {
-        console.log('Failed to fetch organizations:', e);
-      }
-
-      // Fetch users (mode=1)
-      try {
-        const usersData = await api.get<any[]>('/queries/network?filterBy=&mode=1&relations=true');
-        const users = Array.isArray(usersData) ? usersData.map(mapUserToResult) : [];
-        allResults.push(...users);
-      } catch (e) {
-        console.log('Failed to fetch users:', e);
-      }
-
-      setInitialCompanies(allResults);
-      setResults(allResults);
-    } catch (err) {
-      console.error('Failed to load network data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Filter locally when query changes
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setResults(initialCompanies);
-      return;
-    }
-
-    const query = searchQuery.toLowerCase();
-    const filtered = initialCompanies.filter(r =>
-      (r.name || '').toLowerCase().includes(query) ||
-      (r.category || '').toLowerCase().includes(query) ||
-      (r.location || '').toLowerCase().includes(query) ||
-      (r.description || '').toLowerCase().includes(query)
-    );
-    setResults(filtered);
-  }, [searchQuery, initialCompanies]);
-
-  const filteredResults = results.filter((result) => {
+    // Filter by category
     const matchesCategory = selectedCategory === 'all' ||
-                           (result.category || '').toLowerCase().includes(selectedCategory);
-    return matchesCategory;
+      (result.category || '').toLowerCase().includes(selectedCategory);
+
+    return matchesQuery && matchesCategory;
   });
 
   return (
@@ -177,70 +115,77 @@ export function NetworkSearch({ onBack, onSelect }: { onBack: () => void; onSele
 
       {/* Results */}
       <div className="px-4 py-4">
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-[#2E7D32]" />
-          </div>
-        ) : error && results.length === 0 ? (
-          <p className="text-red-600 text-sm text-center py-8">{error}</p>
-        ) : (
-          <>
-            {searchQuery && (
-              <p className="text-sm text-[#757575] mb-3">
-                {filteredResults.length} results for "{searchQuery}"
-              </p>
-            )}
+        {searchQuery && (
+          <p className="text-sm text-[#757575] mb-3">
+            {filteredResults.length} results for "{searchQuery}"
+          </p>
+        )}
 
-            <div className="space-y-3">
-              {filteredResults.map((result) => (
-                <article
-                  key={result.id}
-                  onClick={() => onSelect(result.id, result.type)}
-                  className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`${
-                      result.type === 'organization' ? 'w-16 h-16' : 'w-14 h-14'
-                    } rounded-${result.type === 'person' ? 'full' : 'lg'} overflow-hidden bg-gray-100 flex-shrink-0`}>
-                      <img
-                        src={result.thumbnail}
-                        alt={result.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="line-clamp-1 mb-0.5">{result.name}</h4>
-                      <p className="text-sm text-[#757575] line-clamp-1 mb-1">{result.category}</p>
-                      {result.description && (
-                        <p className="text-xs text-[#757575] line-clamp-1 mb-1">{result.description}</p>
+        <div className="space-y-3">
+          {filteredResults.map((result) => (
+            <article
+              key={result.id}
+              onClick={() => onSelect(result.id, result.type)}
+              className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`${
+                  result.type === 'organization' ? 'w-16 h-16 rounded-lg' : 'w-14 h-14 rounded-full'
+                } overflow-hidden ${result.type === 'organization' ? 'bg-[#1976D2]' : 'bg-[#2E7D32]'} flex-shrink-0`}>
+                  {result.thumbnail ? (
+                    <img
+                      src={result.thumbnail}
+                      alt={result.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white">
+                      {result.type === 'organization' ? (
+                        <Building2 className="w-6 h-6" />
+                      ) : (
+                        <span className="text-lg font-semibold">
+                          {result.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                        </span>
                       )}
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 text-xs text-[#757575]">
-                          <MapPin className="w-3 h-3" />
-                          <span>{result.location}</span>
-                        </div>
-                        {result.verified && (
-                          <Badge className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] border-none text-xs px-1.5 py-0">
-                            Verified
-                          </Badge>
-                        )}
-                      </div>
                     </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="line-clamp-1 mb-0.5">{result.name}</h4>
+                  <p className="text-sm text-[#757575] line-clamp-1 mb-1">{result.category}</p>
+                  {result.description && (
+                    <p className="text-xs text-[#757575] line-clamp-1 mb-1">{result.description}</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {result.location && (
+                      <div className="flex items-center gap-1 text-xs text-[#757575]">
+                        <MapPin className="w-3 h-3" />
+                        <span>{result.location}</span>
+                      </div>
+                    )}
+                    {result.verified && (
+                      <Badge className="bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9] border-none text-xs px-1.5 py-0">
+                        Verified
+                      </Badge>
+                    )}
                   </div>
-                </article>
-              ))}
-            </div>
-
-            {filteredResults.length === 0 && searchQuery && (
-              <div className="text-center py-12">
-                <Search className="w-12 h-12 text-[#757575] mx-auto mb-3" />
-                <h3 className="mb-2">No results found</h3>
-                <p className="text-sm text-[#757575] max-w-xs mx-auto">
-                  Try adjusting your search or filters
-                </p>
+                </div>
               </div>
-            )}
-          </>
+            </article>
+          ))}
+        </div>
+
+        {filteredResults.length === 0 && searchQuery && (
+          <div className="text-center py-12">
+            <Search className="w-12 h-12 text-[#757575] mx-auto mb-3" />
+            <h3 className="mb-2">No results found</h3>
+            <p className="text-sm text-[#757575] max-w-xs mx-auto">
+              Try adjusting your search or filters
+            </p>
+          </div>
         )}
       </div>
     </div>
