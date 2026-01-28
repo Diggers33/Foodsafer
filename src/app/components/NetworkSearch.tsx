@@ -66,66 +66,59 @@ export function NetworkSearch({ onBack, onSelect }: { onBack: () => void; onSele
   const [error, setError] = useState<string | null>(null);
   const [initialCompanies, setInitialCompanies] = useState<SearchResult[]>([]);
 
-  // Load initial companies on mount
+  // Load initial data from network endpoint (users and organizations)
   useEffect(() => {
-    fetchInitialCompanies();
+    fetchNetworkData();
   }, []);
 
-  const fetchInitialCompanies = async () => {
+  const fetchNetworkData = async () => {
     setIsLoading(true);
     try {
-      const data = await api.get<any[]>('/queries/companies');
-      const companiesArray = Array.isArray(data) ? data : [];
-      const mapped = companiesArray.map(mapCompanyToResult);
-      setInitialCompanies(mapped);
-      setResults(mapped);
+      const allResults: SearchResult[] = [];
+
+      // Fetch organizations (mode=2)
+      try {
+        const orgsData = await api.get<any[]>('/queries/network?filterBy=&mode=2&relations=true');
+        const orgs = Array.isArray(orgsData) ? orgsData.map(mapCompanyToResult) : [];
+        allResults.push(...orgs);
+      } catch (e) {
+        console.log('Failed to fetch organizations:', e);
+      }
+
+      // Fetch users (mode=1)
+      try {
+        const usersData = await api.get<any[]>('/queries/network?filterBy=&mode=1&relations=true');
+        const users = Array.isArray(usersData) ? usersData.map(mapUserToResult) : [];
+        allResults.push(...users);
+      } catch (e) {
+        console.log('Failed to fetch users:', e);
+      }
+
+      setInitialCompanies(allResults);
+      setResults(allResults);
     } catch (err) {
-      console.error('Failed to load companies:', err);
+      console.error('Failed to load network data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Search when query changes
+  // Filter locally when query changes
   useEffect(() => {
     if (!searchQuery.trim()) {
       setResults(initialCompanies);
       return;
     }
 
-    const searchTimeout = setTimeout(async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        // Search companies
-        const companiesData = await api.get<any[]>(`/queries/companies/search?q=${encodeURIComponent(searchQuery)}`);
-        const companies = Array.isArray(companiesData) ? companiesData.map(mapCompanyToResult) : [];
-
-        // Try to search users as well
-        let users: SearchResult[] = [];
-        try {
-          const usersData = await api.get<any[]>(`/queries/users/search?q=${encodeURIComponent(searchQuery)}`);
-          users = Array.isArray(usersData) ? usersData.map(mapUserToResult) : [];
-        } catch {
-          // Users search may not be available
-        }
-
-        setResults([...companies, ...users]);
-      } catch (err) {
-        console.error('Search failed:', err);
-        // Fallback to filtering initial companies
-        const filtered = initialCompanies.filter(r =>
-          r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          r.category.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        setResults(filtered);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(searchTimeout);
+    const query = searchQuery.toLowerCase();
+    const filtered = initialCompanies.filter(r =>
+      r.name.toLowerCase().includes(query) ||
+      r.category.toLowerCase().includes(query) ||
+      r.location.toLowerCase().includes(query) ||
+      (r.description && r.description.toLowerCase().includes(query))
+    );
+    setResults(filtered);
   }, [searchQuery, initialCompanies]);
 
   const filteredResults = results.filter((result) => {
