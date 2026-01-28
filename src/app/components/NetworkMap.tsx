@@ -34,17 +34,23 @@ function parseCoordinate(value: any): number | null {
   return num;
 }
 
-function mapUser(u: any, isConnected: boolean = false): NetworkPerson {
+function mapUser(u: any, isConnected: boolean = false, companyCoord?: { lat: number; lng: number } | null): NetworkPerson {
   const avatar = u.avatar ? (u.avatar.startsWith('http') ? u.avatar : `${API_BASE}${u.avatar}`) : '';
   const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || 'Unknown';
   const company = u.userCompanies?.[0]?.company?.name || u.organization || u.company || '';
   const location = u.city || u.country || u.location || '';
 
   // Parse coordinates - users may have lat/lng from their profile or company
-  const lat = parseCoordinate(u.latitude) ?? parseCoordinate(u.lat) ??
-              parseCoordinate(u.userCompanies?.[0]?.company?.latitude);
-  const lng = parseCoordinate(u.longitude) ?? parseCoordinate(u.lng) ??
-              parseCoordinate(u.userCompanies?.[0]?.company?.longitude);
+  let lat = parseCoordinate(u.latitude) ?? parseCoordinate(u.lat) ??
+            parseCoordinate(u.userCompanies?.[0]?.company?.latitude);
+  let lng = parseCoordinate(u.longitude) ?? parseCoordinate(u.lng) ??
+            parseCoordinate(u.userCompanies?.[0]?.company?.longitude);
+
+  // Use company coordinates from lookup if user doesn't have their own
+  if ((lat === null || lng === null) && companyCoord) {
+    lat = companyCoord.lat;
+    lng = companyCoord.lng;
+  }
 
   return {
     id: u.id,
@@ -89,14 +95,28 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       const items = Array.isArray(response) ? response : [];
       console.log('Network items found:', items.length);
 
+      // First pass: collect all companies with coordinates for user lookup
+      const companyCoords = new Map<string, { lat: number; lng: number }>();
+      items.forEach((item: any) => {
+        if (item.type !== 1 && !item.firstName) {
+          const lat = parseCoordinate(item.latitude) ?? parseCoordinate(item.lat);
+          const lng = parseCoordinate(item.longitude) ?? parseCoordinate(item.lng);
+          if (lat !== null && lng !== null) {
+            companyCoords.set(item.id, { lat, lng });
+          }
+        }
+      });
+
       items.forEach((item: any) => {
         if (seenIds.has(item.id)) return;
         seenIds.add(item.id);
 
         // Check if it's a user (type: 1) or company (type: 2)
         if (item.type === 1 || item.firstName) {
-          // It's a user
-          allPeople.push(mapUser(item, false));
+          // It's a user - try to get coordinates from their company
+          const userCompanyId = item.userCompanies?.[0]?.company?.id || item.userCompanies?.[0]?.companyId;
+          const companyCoord = userCompanyId ? companyCoords.get(userCompanyId) : null;
+          allPeople.push(mapUser(item, false, companyCoord));
         } else {
           // It's a company/organization
           const logo = item.logo || item.image || item.thumbnail || item.avatar || '';
@@ -120,9 +140,15 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
       });
 
       const withCoords = allPeople.filter(p => isFinite(p.lat) && isFinite(p.lng));
-      console.log(`Network: ${allPeople.length} total, ${withCoords.length} with valid coordinates`);
-      if (withCoords.length > 0) {
-        console.log('Sample coordinates:', withCoords.slice(0, 3).map(p => ({ name: p.name, lat: p.lat, lng: p.lng })));
+      const usersWithCoords = allPeople.filter(p => p.itemType === 'user' && isFinite(p.lat) && isFinite(p.lng));
+      const orgsWithCoords = allPeople.filter(p => p.itemType === 'organization' && isFinite(p.lat) && isFinite(p.lng));
+      const totalUsers = allPeople.filter(p => p.itemType === 'user').length;
+      const totalOrgs = allPeople.filter(p => p.itemType === 'organization').length;
+
+      console.log(`Network: ${allPeople.length} total (${totalUsers} users, ${totalOrgs} orgs)`);
+      console.log(`With coordinates: ${withCoords.length} total (${usersWithCoords.length} users, ${orgsWithCoords.length} orgs)`);
+      if (usersWithCoords.length > 0) {
+        console.log('Sample users with coords:', usersWithCoords.slice(0, 3).map(p => ({ name: p.name, org: p.organization, lat: p.lat, lng: p.lng })));
       }
       setPeople(allPeople);
     } catch (err) {
