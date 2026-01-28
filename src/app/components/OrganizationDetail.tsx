@@ -45,11 +45,14 @@ const API_BASE = 'https://my.foodsafer.com:443/api';
 
 function mapOrganization(c: any): OrganizationData {
   // Logo - used in list view and profile card
-  const logo = c.logo ? (c.logo.startsWith('http') ? c.logo : `${API_BASE}${c.logo}`) : '';
+  const logoRaw = c.logo || c.thumbnail || c.avatar || c.icon || '';
+  const logo = logoRaw ? (logoRaw.startsWith('http') ? logoRaw : `${API_BASE}${logoRaw}`) : '';
 
-  // Cover/display image - used as banner at top of profile (don't fallback to logo)
-  const cover = c.coverImage || c.cover || c.banner || c.displayImage || c.headerImage || c.image || '';
-  const coverUrl = cover ? (cover.startsWith('http') ? cover : `${API_BASE}${cover}`) : '';
+  // Cover/display image - used as banner at top of profile
+  const coverRaw = c.coverImage || c.cover || c.banner || c.displayImage || c.headerImage || c.image || '';
+  const coverUrl = coverRaw ? (coverRaw.startsWith('http') ? coverRaw : `${API_BASE}${coverRaw}`) : '';
+
+  console.log('Organization data:', { name: c.name, logo: c.logo, logoRaw, coverRaw, logoUrl: logo, coverUrl });
 
   const team = (c.members || c.employees || []).slice(0, 5).map((m: any) => {
     const user = m.user || m;
