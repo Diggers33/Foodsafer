@@ -1,92 +1,20 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, MapPin, Building, Briefcase, MessageSquare, UserPlus, Loader2, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, MapPin, Building, MessageSquare, UserPlus, Mail, Phone } from 'lucide-react';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { api } from '@/api';
 
-interface UserData {
+export interface UserProfileData {
   id: string;
   name: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   avatar: string;
   role: string;
   organization: string;
   location: string;
-  bio: string;
+  bio?: string;
   isConnected: boolean;
 }
 
-const API_BASE = 'https://my.foodsafer.com:443/api';
-
-function mapUserData(u: any): UserData {
-  const avatar = u.avatar ? (u.avatar.startsWith('http') ? u.avatar : `${API_BASE}${u.avatar}`) : '';
-  const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || 'Unknown';
-  const company = u.userCompanies?.[0]?.company?.name || u.organization || u.company || '';
-  const location = [u.city, u.country].filter(Boolean).join(', ') || u.location || '';
-
-  return {
-    id: u.id,
-    name,
-    email: u.email || '',
-    phone: u.phone || u.phoneNumber || '',
-    avatar,
-    role: u.jobTitle || u.role || u.title || '',
-    organization: company,
-    location,
-    bio: u.bio || u.about || u.description || '',
-    isConnected: u.isConnected ?? false,
-  };
-}
-
-export function UserProfileDetail({ userId, onBack }: { userId: string; onBack: () => void }) {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchUser();
-  }, [userId]);
-
-  const fetchUser = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await api.get<any>(`/queries/users/${userId}`);
-      setUser(mapUserData(data));
-    } catch (err) {
-      console.error('Failed to load user:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load user profile');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
-      </div>
-    );
-  }
-
-  if (error || !user) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F5]">
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-          <div className="flex items-center px-4 h-14">
-            <button onClick={onBack}>
-              <ArrowLeft className="w-6 h-6 text-[#212121]" />
-            </button>
-            <h2 className="ml-3">Profile</h2>
-          </div>
-        </header>
-        <div className="flex items-center justify-center py-20">
-          <p className="text-red-600">{error || 'User not found'}</p>
-        </div>
-      </div>
-    );
-  }
+export function UserProfileDetail({ user, onBack }: { user: UserProfileData; onBack: () => void }) {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">

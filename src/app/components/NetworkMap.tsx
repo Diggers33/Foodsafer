@@ -6,7 +6,7 @@ import { MessagesList } from './MessagesList';
 import { ConnectionsList } from './ConnectionsList';
 import { NetworkSearch } from './NetworkSearch';
 import { GoogleMapView } from './GoogleMapView';
-import { UserProfileDetail } from './UserProfileDetail';
+import { UserProfileDetail, UserProfileData } from './UserProfileDetail';
 import { api } from '@/api';
 
 type NetworkItemType = 'user' | 'organization';
@@ -69,7 +69,7 @@ function mapUser(u: any, isConnected: boolean = false, companyCoord?: { lat: num
 export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   const [view, setView] = useState<'map' | 'list'>('map');
   const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserProfileData | null>(null);
   const [showMessages, setShowMessages] = useState(false);
   const [showConnections, setShowConnections] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -180,7 +180,7 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
   };
 
   if (selectedUser) {
-    return <UserProfileDetail userId={selectedUser} onBack={() => setSelectedUser(null)} />;
+    return <UserProfileDetail user={selectedUser} onBack={() => setSelectedUser(null)} />;
   }
 
   if (selectedOrg) {
@@ -204,7 +204,18 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           if (type === 'organization') {
             setSelectedOrg(id);
           } else if (type === 'user') {
-            setSelectedUser(id);
+            const person = people.find(p => p.id === id);
+            if (person) {
+              setSelectedUser({
+                id: person.id,
+                name: person.name,
+                avatar: person.avatar,
+                role: person.role,
+                organization: person.organization,
+                location: person.location,
+                isConnected: person.isConnected,
+              });
+            }
           }
         }}
       />
@@ -306,8 +317,16 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
               const item = filteredPeople.find(p => p.id === id);
               if (item?.itemType === 'organization') {
                 setSelectedOrg(id);
-              } else {
-                setSelectedUser(id);
+              } else if (item) {
+                setSelectedUser({
+                  id: item.id,
+                  name: item.name,
+                  avatar: item.avatar,
+                  role: item.role,
+                  organization: item.organization,
+                  location: item.location,
+                  isConnected: item.isConnected,
+                });
               }
             }}
             onBoundsChange={(visibleIds) => {
@@ -352,7 +371,15 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
                             key={person.id}
                             person={person}
                             compact
-                            onSelect={() => person.itemType === 'organization' ? setSelectedOrg(person.id) : setSelectedUser(person.id)}
+                            onSelect={() => person.itemType === 'organization' ? setSelectedOrg(person.id) : setSelectedUser({
+                              id: person.id,
+                              name: person.name,
+                              avatar: person.avatar,
+                              role: person.role,
+                              organization: person.organization,
+                              location: person.location,
+                              isConnected: person.isConnected,
+                            })}
                           />
                         ))}
                       </div>
@@ -388,7 +415,15 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
                   <NetworkPersonCard
                     key={person.id}
                     person={person}
-                    onSelect={() => person.itemType === 'organization' ? setSelectedOrg(person.id) : setSelectedUser(person.id)}
+                    onSelect={() => person.itemType === 'organization' ? setSelectedOrg(person.id) : setSelectedUser({
+                      id: person.id,
+                      name: person.name,
+                      avatar: person.avatar,
+                      role: person.role,
+                      organization: person.organization,
+                      location: person.location,
+                      isConnected: person.isConnected,
+                    })}
                   />
                 ))}
               </div>
