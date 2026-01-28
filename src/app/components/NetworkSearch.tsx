@@ -1,4 +1,4 @@
-import { ArrowLeft, Search, MapPin, Building2, Beaker, GraduationCap, Users, Wrench } from 'lucide-react';
+import { ArrowLeft, Search, MapPin, Building2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from './ui/badge';
 
@@ -15,11 +15,8 @@ interface SearchResult {
 
 const categories = [
   { id: 'all', label: 'All', icon: null },
-  { id: 'manufacturer', label: 'Manufacturers', icon: <Building2 className="w-4 h-4" /> },
-  { id: 'laboratory', label: 'Labs', icon: <Beaker className="w-4 h-4" /> },
-  { id: 'consultant', label: 'Consultants', icon: <Users className="w-4 h-4" /> },
-  { id: 'training', label: 'Training', icon: <GraduationCap className="w-4 h-4" /> },
-  { id: 'tools', label: 'Tools', icon: <Wrench className="w-4 h-4" /> },
+  { id: 'organization', label: 'Organizations', icon: <Building2 className="w-4 h-4" /> },
+  { id: 'person', label: 'Users', icon: <Users className="w-4 h-4" /> },
 ];
 
 interface NetworkDataItem {
@@ -64,9 +61,9 @@ export function NetworkSearch({ networkData, onBack, onSelect }: NetworkSearchPr
       (result.location || '').toLowerCase().includes(query) ||
       (result.description || '').toLowerCase().includes(query);
 
-    // Filter by category
+    // Filter by type (organization or person)
     const matchesCategory = selectedCategory === 'all' ||
-      (result.category || '').toLowerCase().includes(selectedCategory);
+      result.type === selectedCategory;
 
     return matchesQuery && matchesCategory;
   });
