@@ -1,4 +1,4 @@
-import { ArrowLeft, Search, MapPin, Building2, Users } from 'lucide-react';
+import { ArrowLeft, Search, MapPin, Building2, Beaker, GraduationCap, Users, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from './ui/badge';
 
@@ -13,10 +13,14 @@ interface SearchResult {
   verified?: boolean;
 }
 
+// Organization type filter tabs
 const categories = [
   { id: 'all', label: 'All', icon: null },
-  { id: 'organization', label: 'Organizations', icon: <Building2 className="w-4 h-4" /> },
-  { id: 'person', label: 'Users', icon: <Users className="w-4 h-4" /> },
+  { id: 'manufacturer', label: 'Manufacturers', icon: <Building2 className="w-4 h-4" /> },
+  { id: 'laboratory', label: 'Labs', icon: <Beaker className="w-4 h-4" /> },
+  { id: 'consultant', label: 'Consultants', icon: <Users className="w-4 h-4" /> },
+  { id: 'training', label: 'Training', icon: <GraduationCap className="w-4 h-4" /> },
+  { id: 'service', label: 'Services', icon: <Wrench className="w-4 h-4" /> },
 ];
 
 interface NetworkDataItem {
@@ -27,6 +31,7 @@ interface NetworkDataItem {
   location: string;
   avatar: string;
   itemType: 'user' | 'organization';
+  category: string;
 }
 
 interface NetworkSearchProps {
@@ -39,17 +44,19 @@ export function NetworkSearch({ networkData, onBack, onSelect }: NetworkSearchPr
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  // Convert network data to search results format (instant, no API call)
-  const allResults: SearchResult[] = networkData.map(item => ({
-    id: item.id,
-    name: item.name,
-    type: item.itemType === 'organization' ? 'organization' as const : 'person' as const,
-    category: item.itemType === 'organization' ? 'Organization' : (item.role || 'Member'),
-    location: item.location || '',
-    thumbnail: item.avatar || '',
-    description: item.itemType === 'user' ? item.organization : '',
-    verified: false,
-  }));
+  // Convert network data to search results format - only organizations
+  const allResults: SearchResult[] = networkData
+    .filter(item => item.itemType === 'organization')
+    .map(item => ({
+      id: item.id,
+      name: item.name,
+      type: 'organization' as const,
+      category: item.category || '',
+      location: item.location || '',
+      thumbnail: item.avatar || '',
+      description: '',
+      verified: false,
+    }));
 
   // Filter results based on search query and category
   const query = searchQuery.toLowerCase();
@@ -61,9 +68,9 @@ export function NetworkSearch({ networkData, onBack, onSelect }: NetworkSearchPr
       (result.location || '').toLowerCase().includes(query) ||
       (result.description || '').toLowerCase().includes(query);
 
-    // Filter by type (organization or person)
+    // Filter by organization type/category
     const matchesCategory = selectedCategory === 'all' ||
-      result.type === selectedCategory;
+      (result.category || '').toLowerCase().includes(selectedCategory.toLowerCase());
 
     return matchesQuery && matchesCategory;
   });
@@ -83,7 +90,7 @@ export function NetworkSearch({ networkData, onBack, onSelect }: NetworkSearchPr
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search organizations and people..."
+                placeholder="Search organizations..."
                 className="w-full h-11 pl-10 pr-4 bg-[#F5F5F5] rounded-lg text-sm text-[#212121] placeholder:text-[#757575] outline-none focus:bg-white focus:ring-2 focus:ring-[#2E7D32]"
                 autoFocus
               />

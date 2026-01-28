@@ -23,6 +23,7 @@ interface NetworkPerson {
   lng: number;
   isConnected: boolean;
   itemType: NetworkItemType;
+  category: string; // Organization type (e.g., Manufacturer, Laboratory) or user role
 }
 
 const API_BASE = 'https://my.foodsafer.com:443/api';
@@ -63,6 +64,7 @@ function mapUser(u: any, isConnected: boolean = false, companyCoord?: { lat: num
     lng: lng ?? NaN,
     isConnected,
     itemType: 'user',
+    category: u.jobTitle || u.role || u.title || '',
   };
 }
 
@@ -145,6 +147,8 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
           const logoUrl = logo ? (logo.startsWith('http') ? logo : `${API_BASE}${logo}`) : '';
           const lat = parseCoordinate(item.latitude) ?? parseCoordinate(item.lat);
           const lng = parseCoordinate(item.longitude) ?? parseCoordinate(item.lng);
+          // Get organization type/category
+          const orgCategory = item.type || item.category || item.companyType || item.organizationType || '';
 
           allPeople.push({
             id: item.id,
@@ -157,6 +161,7 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             lng: lng ?? NaN,
             isConnected: false,
             itemType: 'organization',
+            category: typeof orgCategory === 'string' ? orgCategory : String(orgCategory || ''),
           });
         }
       });
