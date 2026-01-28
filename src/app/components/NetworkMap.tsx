@@ -321,11 +321,11 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
             <div className="px-4 pb-4">
               {(() => {
                 // Filter to show only items visible in current map view
-                // If no bounds calculated yet, show all items with valid coords
+                // Only show items after map bounds have been calculated
                 const itemsWithCoords = filteredPeople.filter(p => isFinite(p.lat) && isFinite(p.lng));
                 const visibleItems = visiblePeopleIds.length > 0
                   ? itemsWithCoords.filter(p => visiblePeopleIds.includes(p.id))
-                  : itemsWithCoords;
+                  : [];
                 const itemCount = visibleItems.length;
                 const itemLabel = filterType === 'organizations' ? 'organization' : filterType === 'users' ? 'user' : 'item';
                 const itemLabelPlural = filterType === 'organizations' ? 'organizations' : filterType === 'users' ? 'users' : 'items';
@@ -341,6 +341,8 @@ export function NetworkMap({ onProfileClick }: { onProfileClick: () => void }) {
                       </div>
                     ) : error ? (
                       <p className="text-red-600 text-sm text-center py-4">{error}</p>
+                    ) : itemCount === 0 && visiblePeopleIds.length === 0 ? (
+                      <p className="text-[#757575] text-center py-4">Loading map...</p>
                     ) : itemCount === 0 ? (
                       <p className="text-[#757575] text-center py-4">No {itemLabelPlural} in this area. Try zooming out.</p>
                     ) : (
