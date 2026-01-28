@@ -135,26 +135,25 @@ export function NetworkSearch({ networkData, onBack, onSelect }: NetworkSearchPr
               <div className="flex items-center gap-3">
                 <div className={`${
                   result.type === 'organization' ? 'w-16 h-16 rounded-lg' : 'w-14 h-14 rounded-full'
-                } overflow-hidden ${result.type === 'organization' ? 'bg-[#1976D2]' : 'bg-[#2E7D32]'} flex-shrink-0`}>
-                  {result.thumbnail ? (
+                } overflow-hidden ${result.type === 'organization' ? 'bg-[#1976D2]' : 'bg-[#2E7D32]'} flex-shrink-0 relative`}>
+                  <div className="w-full h-full flex items-center justify-center text-white absolute">
+                    {result.type === 'organization' ? (
+                      <Building2 className="w-6 h-6" />
+                    ) : (
+                      <span className="text-lg font-semibold">
+                        {result.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  {result.thumbnail && (
                     <img
                       src={result.thumbnail}
                       alt={result.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover absolute inset-0"
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                       }}
                     />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white">
-                      {result.type === 'organization' ? (
-                        <Building2 className="w-6 h-6" />
-                      ) : (
-                        <span className="text-lg font-semibold">
-                          {result.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
